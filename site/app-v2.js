@@ -1,3 +1,4 @@
+// Versioned asset: bump the filename whenever this file changes.
 const menuButton = document.querySelector(".menu-button");
 const navLinks = document.querySelector(".nav-links");
 const siteHeader = document.querySelector(".site-header");
