@@ -209,12 +209,18 @@ fn random_bytes<const N: usize>() -> Result<[u8; N]> {
 }
 
 fn format_pairing_code(bytes: &[u8; 16]) -> String {
-    let encoded = URL_SAFE_NO_PAD.encode(bytes).to_ascii_uppercase();
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut encoded = String::with_capacity(32);
+    for byte in bytes {
+        encoded.push(char::from(HEX[usize::from(byte >> 4)]));
+        encoded.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
     format!(
-        "PL-{}-{}-{}",
-        &encoded[0..6],
-        &encoded[6..12],
-        &encoded[12..18]
+        "PL-{}-{}-{}-{}",
+        &encoded[0..8],
+        &encoded[8..16],
+        &encoded[16..24],
+        &encoded[24..32]
     )
 }
 
@@ -254,7 +260,7 @@ mod tests {
     #[test]
     fn pairing_codes_have_no_ambiguous_separators() {
         let code = format_pairing_code(&[7; 16]);
-        assert!(code.starts_with("PL-"));
-        assert_eq!(code.split('-').count(), 4);
+        assert_eq!(code, "PL-07070707-07070707-07070707-07070707");
+        assert_eq!(code.split('-').count(), 5);
     }
 }

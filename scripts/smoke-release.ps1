@@ -66,7 +66,7 @@ try {
     $pairOutput = (& $exe --data-dir $dataDir pair --origin "https://smoke.printlatch.test" --name "Release smoke") -join "`n"
     $pairCode = [regex]::Match(
         $pairOutput,
-        "(?m)^Pairing code: (?<code>PL-[A-Z0-9_-]{6}-[A-Z0-9_-]{6}-[A-Z0-9_-]{6})\r?$"
+        "(?m)^Pairing code: (?<code>PL-[A-F0-9]{8}-[A-F0-9]{8}-[A-F0-9]{8}-[A-F0-9]{8})\r?$"
     ).Groups["code"].Value
     if (-not $pairCode) {
         throw "Pairing command did not return a code"

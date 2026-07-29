@@ -15,7 +15,7 @@ and telemetry status. It exposes no printer, client, document, or queue data.
 Browser only. Requires the browser-provided `Origin` header.
 
 ```json
-{ "code": "PL-XXXXXX-XXXXXX-XXXXXX" }
+{ "code": "PL-XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX" }
 ```
 
 Returns a browser token once. The local CLI must have created the code for the
@@ -94,4 +94,3 @@ attempts are allowed.
 
 Internal errors are logged locally and returned as the generic message
 `internal error`.
-
