@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: Rust (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: 1.94.1
+          components: rustfmt, clippy
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Check
+        run: cargo check --locked --all-targets
+      - name: Test
+        run: cargo test --locked --all-targets
+      - name: Clippy
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+
+  sdk:
+    name: TypeScript SDK
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - run: pnpm audit --audit-level high
+
+  dependency-audit:
+    name: Rust dependency audit
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc
+
+  windows-artifact:
+    name: Windows x64 artifact and smoke
+    runs-on: windows-2025
+    needs: [rust, sdk, dependency-audit, secret-scan]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: 1.94.1
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: cargo build --locked --release
+      - name: Stage archive
+        shell: pwsh
+        run: |
+          $version = (cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).packages[0].version
+          $stage = "artifacts/printlatch-v$version-windows-x64"
+          New-Item -ItemType Directory -Force "$stage/docs/assets", "$stage/examples", "$stage/packages/sdk/dist" | Out-Null
+          Copy-Item target/release/printlatch.exe "$stage/printlatch.exe"
+          Copy-Item scripts/install.ps1 "$stage/install.ps1"
+          Copy-Item scripts/uninstall.ps1 "$stage/uninstall.ps1"
+          Copy-Item scripts/smoke-release.ps1 "$stage/smoke-release.ps1"
+          Copy-Item docs/assets/sample.pdf "$stage/docs/assets/sample.pdf"
+          Copy-Item examples/*.js, examples/*.mjs "$stage/examples/"
+          Copy-Item packages/sdk/dist/* "$stage/packages/sdk/dist/"
+          Copy-Item packages/sdk/package.json, packages/sdk/README.md "$stage/packages/sdk/"
+          Copy-Item README.md, LICENSE, NOTICE, SECURITY.md "$stage/"
+          Compress-Archive -Path "$stage/*" -DestinationPath "artifacts/printlatch-v$version-windows-x64.zip"
+          $hash = (Get-FileHash "artifacts/printlatch-v$version-windows-x64.zip" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  printlatch-v$version-windows-x64.zip" | Set-Content artifacts/SHA256SUMS.txt
+          "STAGE=$stage" >> $env:GITHUB_ENV
+      - name: Run release smoke
+        shell: pwsh
+        run: ./scripts/smoke-release.ps1 -ArchiveRoot $env:STAGE
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: printlatch-windows-x64-${{ github.sha }}
+          path: |
+            artifacts/*.zip
+            artifacts/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14

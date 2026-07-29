@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PrintLatch - Local PDF printing for Windows web apps</title>
+    <meta
+      name="description"
+      content="An open-source, explicitly paired Windows agent for printing PDFs from web and Node.js apps without a print cloud."
+    />
+    <meta name="theme-color" content="#07110e" />
+    <meta name="color-scheme" content="dark" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="PrintLatch" />
+    <meta property="og:title" content="Print PDFs from web apps. Keep the job local." />
+    <meta
+      property="og:description"
+      content="A narrow, open-source Windows print agent with exact-origin pairing, a durable queue, and a built-in capture target."
+    />
+    <meta property="og:url" content="https://printlatch.vercel.app/" />
+    <meta property="og:image" content="https://printlatch.vercel.app/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="PrintLatch" />
+    <meta
+      name="twitter:description"
+      content="Local, explicitly authorized PDF printing for Windows web apps."
+    />
+    <meta name="twitter:image" content="https://printlatch.vercel.app/og.png" />
+    <link rel="canonical" href="https://printlatch.vercel.app/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <nav class="nav shell" aria-label="Primary navigation">
+        <a class="brand" href="#top" aria-label="PrintLatch home">
+          <svg viewBox="0 0 36 36" aria-hidden="true">
+            <path d="M8 7.5h20v14H8z" />
+            <path d="M11 4h14v8H11zM11 21h14v11H11z" />
+            <path class="accent" d="M15 25h6v2h-6z" />
+          </svg>
+          <span>PrintLatch</span>
+        </a>
+        <button class="menu-button" type="button" aria-expanded="false" aria-controls="nav-links">
+          <span class="sr-only">Toggle navigation</span>
+          <span></span><span></span>
+        </button>
+        <div class="nav-links" id="nav-links">
+          <a href="#security">Security</a>
+          <a href="#support">Support</a>
+          <a href="#how">How it works</a>
+          <a href="https://github.com/arturict/printlatch/tree/main/docs">Docs</a>
+          <a class="nav-download" href="https://github.com/arturict/printlatch/releases/latest"
+            >Download</a
+          >
+        </div>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero shell" id="top">
+        <div class="hero-copy">
+          <p class="eyebrow"><span></span> Open source · Windows 11 x64 · PDF only</p>
+          <h1>Print from the web.<br /><em>Keep the job local.</em></h1>
+          <p class="lede">
+            PrintLatch connects an explicitly paired web app or local Node.js process to printers
+            already installed in Windows. No print cloud, account, certificate subscription, or
+            telemetry.
+          </p>
+          <div class="actions">
+            <a class="button primary" href="https://github.com/arturict/printlatch/releases/latest">
+              Download v0.1.0
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="m7 4 6 6-6 6" />
+              </svg>
+            </a>
+            <a class="button secondary" href="https://github.com/arturict/printlatch">
+              View source
+            </a>
+          </div>
+          <p class="install-note">Unsigned in v0.1. Verify the published SHA-256 checksum.</p>
+        </div>
+
+        <div class="console-wrap" role="img" aria-label="Example PrintLatch job">
+          <div class="console-glow"></div>
+          <div class="console">
+            <div class="console-bar">
+              <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
+              <span>PowerShell</span>
+              <span class="local-badge">127.0.0.1</span>
+            </div>
+            <div class="console-body">
+              <p><span class="prompt">PS&gt;</span> printlatch pair <span class="dim">--origin</span></p>
+              <p class="indent">https://billing.example</p>
+              <div class="pairing">
+                <span>PAIRING CODE</span>
+                <strong>PL-••••••-••••••</strong>
+                <small>Expires in 5:00 · exact origin only</small>
+              </div>
+              <p><span class="prompt">PS&gt;</span> node print-invoice.mjs invoice.pdf</p>
+              <div class="job">
+                <div>
+                  <span class="status-dot"></span>
+                  <strong>Job accepted locally</strong>
+                </div>
+                <dl>
+                  <div><dt>Target</dt><dd>Office printer</dd></div>
+                  <div><dt>Format</dt><dd>PDF · 2 pages</dd></div>
+                  <div><dt>State</dt><dd class="success">succeeded*</dd></div>
+                </dl>
+              </div>
+              <p class="footnote">* Windows accepted the submission. Physical output is not claimed.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="proof-strip" aria-label="Core product properties">
+        <div class="shell proof-grid">
+          <div><strong>Loopback only</strong><span>No LAN listener</span></div>
+          <div><strong>Exact-origin pairing</strong><span>No wildcard CORS</span></div>
+          <div><strong>Durable queue</strong><span>No silent replay</span></div>
+          <div><strong>Zero telemetry</strong><span>Documents stay local</span></div>
+        </div>
+      </section>
+
+      <section class="section shell" id="security">
+        <div class="section-heading">
+          <p class="eyebrow"><span></span> A deliberately small trust boundary</p>
+          <h2>Local does not mean unauthenticated.</h2>
+          <p>
+            Every sensitive endpoint requires a scoped credential. Browser access begins with a
+            short-lived code created by the person at the Windows machine.
+          </p>
+        </div>
+        <div class="security-grid">
+          <article class="feature-card card-pair">
+            <div class="card-number">01</div>
+            <h3>Pair one origin</h3>
+            <p>
+              A 128-bit, five-minute code is bound to one exact HTTPS origin and consumed once.
+              Browser tokens cannot be replayed by another site.
+            </p>
+            <div class="origin-chip"><i></i> https://billing.example</div>
+          </article>
+          <article class="feature-card card-queue">
+            <div class="card-number">02</div>
+            <h3>Inspect the queue</h3>
+            <p>
+              Jobs have visible states, atomic claims, explicit cancellation, and at most three
+              manual retries. Interrupted submissions become unknown.
+            </p>
+            <div class="queue-line">
+              <span>queued</span><i></i><span>printing</span><i></i><span>terminal</span>
+            </div>
+          </article>
+          <article class="feature-card card-pdf">
+            <div class="card-number">03</div>
+            <h3>Constrain the document</h3>
+            <p>
+              Static, unencrypted PDFs only. MIME, signature, pages, objects, streams, images, and
+              active features are validated before queueing.
+            </p>
+            <div class="pdf-stamp">
+              <b>PDF</b><span>≤ 10 MiB<br />≤ 100 pages</span>
+            </div>
+          </article>
+        </div>
+        <a class="text-link" href="https://github.com/arturict/printlatch/blob/main/docs/security/threat-model.md"
+          >Read the complete threat model <span>→</span></a
+        >
+      </section>
+
+      <section class="section architecture" id="how">
+        <div class="shell">
+          <div class="section-heading">
+            <p class="eyebrow"><span></span> One machine, one narrow path</p>
+            <h2>A print bridge, not a print platform.</h2>
+          </div>
+          <div class="flow" role="img" aria-label="Web or Node client connects to loopback API, PDF guard, local queue, then capture or Windows printer">
+            <div class="flow-node clients">
+              <small>AUTHORIZED CLIENT</small>
+              <strong>Web app <span>or</span> Node.js</strong>
+            </div>
+            <div class="flow-arrow"><i></i><span>token + PDF</span></div>
+            <div class="flow-node agent">
+              <small>LOCAL AGENT</small>
+              <strong>API → guard → queue</strong>
+            </div>
+            <div class="flow-arrow"><i></i><span>explicit target</span></div>
+            <div class="flow-node targets">
+              <small>WINDOWS MACHINE</small>
+              <strong>Capture <span>or</span> printer</strong>
+            </div>
+          </div>
+          <p class="flow-boundary">
+            PrintLatch never fetches a URL, constructs a shell command, listens on the LAN, or
+            routes a job through a PrintLatch server.
+          </p>
+        </div>
+      </section>
+
+      <section class="section shell" id="support">
+        <div class="section-heading">
+          <p class="eyebrow"><span></span> Honest V1 support</p>
+          <h2>Useful now. Intentionally not universal.</h2>
+          <p>
+            The built-in PDF capture path is end-to-end testable without hardware. Physical output
+            still depends on the installed Windows driver and printer.
+          </p>
+        </div>
+        <div class="support-grid">
+          <article class="support-card yes">
+            <div class="support-label"><i>✓</i> Supported</div>
+            <ul>
+              <li>Windows 11 x64</li>
+              <li>Static, unencrypted PDF</li>
+              <li>A4 and Letter document workflows</li>
+              <li>HTTPS browser origins after pairing</li>
+              <li>Local Node.js 20+ processes</li>
+              <li>PrintLatch PDF Capture</li>
+              <li>Windows-installed document printers</li>
+            </ul>
+          </article>
+          <article class="support-card no">
+            <div class="support-label"><i>×</i> Not in v0.1</div>
+            <ul>
+              <li>macOS, Linux, ARM64, or Windows 10</li>
+              <li>Raw ESC/POS, ZPL, or driver replacement</li>
+              <li>Label and receipt media guarantees</li>
+              <li>HTML, images, ZIPs, or encrypted PDFs</li>
+              <li>Cloud relay or remote fleet management</li>
+              <li>Proof that physical paper emerged</li>
+              <li>Code signing</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="section code-section">
+        <div class="shell code-grid">
+          <div>
+            <p class="eyebrow"><span></span> Dependency-free TypeScript SDK</p>
+            <h2>One explicit job.</h2>
+            <p>
+              The SDK only accepts an HTTP loopback base URL. Local-process tokens belong in server
+              or desktop code, never in a browser bundle.
+            </p>
+            <a class="text-link" href="https://github.com/arturict/printlatch/blob/main/docs/api.md"
+              >Explore the HTTP API <span>→</span></a
+            >
+          </div>
+          <figure class="code-example">
+            <figcaption class="sr-only">TypeScript print example</figcaption>
+            <pre><code><span class="code-key">const</span> client = <span class="code-key">new</span> <span class="code-type">PrintLatchClient</span>({
+  token: process.env.<span class="code-value">PRINTLATCH_TOKEN</span>,
+});
+
+<span class="code-key">const</span> job = <span class="code-key">await</span> client.<span class="code-fn">createJob</span>({
+  pdf,
+  mode: <span class="code-string">"print"</span>,
+  printerId: <span class="code-string">"capture:pdf"</span>,
+});
+
+console.log(job.state); <span class="code-comment">// queued</span></code></pre>
+          </figure>
+        </div>
+      </section>
+
+      <section class="cta shell">
+        <div>
+          <p class="eyebrow"><span></span> Apache-2.0 licensed</p>
+          <h2>Try the path without touching a printer.</h2>
+          <p>Install the agent, select PDF Capture, and inspect the exact output locally.</p>
+        </div>
+        <div class="actions">
+          <a class="button primary" href="https://github.com/arturict/printlatch/releases/latest"
+            >Get PrintLatch</a
+          >
+          <a class="button secondary" href="https://github.com/arturict/printlatch#install"
+            >Installation guide</a
+          >
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="shell footer-grid">
+        <div>
+          <a class="brand" href="#top">
+            <svg viewBox="0 0 36 36" aria-hidden="true">
+              <path d="M8 7.5h20v14H8z" />
+              <path d="M11 4h14v8H11zM11 21h14v11H11z" />
+              <path class="accent" d="M15 25h6v2h-6z" />
+            </svg>
+            <span>PrintLatch</span>
+          </a>
+          <p>Local PDF printing with an explicit latch.</p>
+        </div>
+        <div class="footer-links">
+          <a href="https://github.com/arturict/printlatch">GitHub</a>
+          <a href="https://github.com/arturict/printlatch/releases">Releases</a>
+          <a href="https://github.com/arturict/printlatch/tree/main/docs">Documentation</a>
+          <a href="https://github.com/arturict/printlatch/security">Security</a>
+          <a href="https://github.com/arturict/printlatch/blob/main/LICENSE">Apache-2.0</a>
+        </div>
+      </div>
+      <div class="shell footer-bottom">
+        <span>© 2026 PrintLatch contributors</span>
+        <span>No tracking. No cookies. No print cloud.</span>
+      </div>
+    </footer>
+  </body>
+</html>

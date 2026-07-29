@@ -1,0 +1,26 @@
+name: Focused feature request
+description: Propose a change within the documented product boundary
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: job
+    attributes:
+      label: User job
+      description: What concrete local PDF printing job is blocked today?
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current workaround
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This does not require a cloud relay, fleet manager, driver replacement, or raw printer language in V1.
+          required: true
+

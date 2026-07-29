@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>PrintLatch</title>
+  <rect width="64" height="64" rx="14" fill="#07110e"/>
+  <g fill="none" stroke="#f4f8f6" stroke-width="3" stroke-linejoin="round">
+    <path d="M14 17h36v25H14z"/>
+    <path d="M20 10h24v14H20zM20 40h24v16H20z"/>
+    <path d="M27 47h10" stroke="#78f0b2"/>
+  </g>
+</svg>

@@ -1,0 +1,49 @@
+name: Bug report
+description: Report a reproducible PrintLatch defect
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include tokens, documents, customer data, or private printer details.
+  - type: input
+    id: version
+    attributes:
+      label: PrintLatch version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: path
+    attributes:
+      label: Path
+      options:
+        - PDF capture
+        - Windows printer discovery
+        - Windows printer submission
+        - Pairing or authorization
+        - Queue or retry
+        - TypeScript SDK
+        - Install or uninstall
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: Include minimal steps and sanitized output.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
