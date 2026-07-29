@@ -24,8 +24,15 @@ All notable changes are documented here. This project uses semantic versioning.
   binds the grant to the current agent session
 - fresh dashboard grants rotate one stable operator credential so queue history
   remains available while the previous token is invalidated
+- ordinary application pairing grants remain independent even when client names
+  and origins match, preventing cross-session history access
 - every active dashboard job now keeps an independent polling loop
 - the bundled test PDF now requires the paired dashboard token
+- dashboard recovery commands include the running executable, active data
+  directory, and port
+- the embedded Node example uses the SDK's exported `PrintLatchClient`
+- integration cards now keep long commands inside their own scrollers on narrow
+  screens instead of widening the full dashboard
 
 ## [0.1.0] - 2026-07-29
 

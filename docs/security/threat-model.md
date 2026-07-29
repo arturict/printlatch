@@ -51,6 +51,7 @@ Version: 0.1.1
 | Restart duplicate | `printing` becomes `unknown`; no automatic replay | restart test |
 | Cross-client document access | Every job lookup is scoped by authenticated client ID | isolation test |
 | Dashboard re-pair history loss | Fresh grants atomically rotate one stable origin/name-scoped browser client, invalidate earlier tokens, and retain its jobs | re-pair history test |
+| Application sessions with matching labels | Stable reuse is recorded only on dashboard grants; ordinary browser grants receive separate client IDs and histories | independent browser-client test |
 | Secret leak in normal logs | Requests are not body-logged; token values are never tracing fields; errors are bounded | source review and SDK error test |
 | Silent remote job | Loopback-only bind; remote server must act through an authorized browser on that machine or a local process | bind assertion and architecture |
 

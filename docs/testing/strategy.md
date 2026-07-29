@@ -34,6 +34,7 @@ The automated suite explicitly covers:
 - wrong-origin pairing without code consumption
 - spoofed local listener and agent-session-bound dashboard grants
 - dashboard re-pair token rotation with retained job history
+- independent application pairing for matching names and origins
 - DNS rebinding host
 - WebSocket upgrade
 - SSRF-shaped unknown field

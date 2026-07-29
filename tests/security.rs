@@ -17,6 +17,7 @@ use tower::ServiceExt;
 
 const HOST: &str = "127.0.0.1:32191";
 const BOUNDARY: &str = "printlatch-test-boundary";
+const AGENT_SESSION: &str = "test-session-value-000000000000000000000000";
 
 struct Harness {
     temp: TempDir,
@@ -37,7 +38,7 @@ impl Harness {
             config,
             db: db.clone(),
             queue: QueueSignal::new(),
-            instance_session: "test-session-value-000000000000000000000000".to_owned(),
+            instance_session: AGENT_SESSION.to_owned(),
         });
         Self {
             temp,
@@ -263,7 +264,7 @@ async fn bundled_test_pdf_requires_authentication() {
 async fn dashboard_repair_rotates_token_and_preserves_job_history() {
     let harness = Harness::new();
     let origin = format!("http://{HOST}");
-    let first = pair_browser(&harness, &origin, "PrintLatch dashboard").await;
+    let first = pair_dashboard(&harness, &origin).await;
     let first_token = first["token"].as_str().expect("first token");
     let first_client = first["client_id"].as_str().expect("first client");
 
@@ -296,7 +297,7 @@ async fn dashboard_repair_rotates_token_and_preserves_job_history() {
         StatusCode::ACCEPTED
     );
 
-    let second = pair_browser(&harness, &origin, "PrintLatch dashboard").await;
+    let second = pair_dashboard(&harness, &origin).await;
     let second_token = second["token"].as_str().expect("second token");
     assert_eq!(
         second["client_id"].as_str().expect("second client"),
@@ -340,6 +341,86 @@ async fn dashboard_repair_rotates_token_and_preserves_job_history() {
     )
     .await;
     assert_eq!(jobs["jobs"].as_array().expect("jobs").len(), 1);
+}
+
+#[tokio::test]
+async fn generic_browser_grants_keep_clients_and_job_history_separate() {
+    let harness = Harness::new();
+    let origin = "https://app.example";
+    let first = pair_browser(&harness, origin, "Browser app").await;
+    let first_token = first["token"].as_str().expect("first token");
+
+    let body = multipart_body(&[
+        text_part("mode", "preview"),
+        file_part("private-history.pdf", "application/pdf", &minimal_pdf()),
+    ]);
+    let mut create = Request::builder()
+        .method(Method::POST)
+        .uri("/v1/jobs")
+        .header(header::HOST, HOST)
+        .header(header::ORIGIN, origin)
+        .header(header::AUTHORIZATION, format!("Bearer {first_token}"))
+        .body(Body::from(body))
+        .expect("create request");
+    create.headers_mut().insert(
+        header::CONTENT_TYPE,
+        format!("multipart/form-data; boundary={BOUNDARY}")
+            .parse()
+            .expect("multipart content type"),
+    );
+    assert_eq!(
+        harness
+            .app
+            .clone()
+            .oneshot(create)
+            .await
+            .expect("create response")
+            .status(),
+        StatusCode::ACCEPTED
+    );
+
+    let second = pair_browser(&harness, origin, "Browser app").await;
+    assert_ne!(first["client_id"], second["client_id"]);
+
+    let second_jobs = Request::builder()
+        .method(Method::GET)
+        .uri("/v1/jobs")
+        .header(header::HOST, HOST)
+        .header(header::ORIGIN, origin)
+        .header(
+            header::AUTHORIZATION,
+            format!("Bearer {}", second["token"].as_str().expect("second token")),
+        )
+        .body(Body::empty())
+        .expect("second-client request");
+    let jobs = response_json(
+        harness
+            .app
+            .clone()
+            .oneshot(second_jobs)
+            .await
+            .expect("second-client response"),
+    )
+    .await;
+    assert!(jobs["jobs"].as_array().expect("jobs").is_empty());
+
+    let first_still_valid = Request::builder()
+        .method(Method::GET)
+        .uri("/v1/jobs")
+        .header(header::HOST, HOST)
+        .header(header::ORIGIN, origin)
+        .header(header::AUTHORIZATION, format!("Bearer {first_token}"))
+        .body(Body::empty())
+        .expect("first-client request");
+    assert_eq!(
+        harness
+            .app
+            .oneshot(first_still_valid)
+            .await
+            .expect("first-client response")
+            .status(),
+        StatusCode::OK
+    );
 }
 
 #[tokio::test]
@@ -563,6 +644,29 @@ async fn pair_browser(harness: &Harness, origin: &str, name: &str) -> Value {
         ))
         .await
         .expect("pair response");
+    assert_eq!(response.status(), StatusCode::OK);
+    response_json(response).await
+}
+
+async fn pair_dashboard(harness: &Harness, origin: &str) -> Value {
+    let grant = auth::new_dashboard_pairing_grant(
+        &harness.db,
+        origin,
+        "PrintLatch dashboard",
+        AGENT_SESSION,
+    )
+    .expect("dashboard pairing grant");
+    let response = harness
+        .app
+        .clone()
+        .oneshot(json_request(
+            Method::POST,
+            "/v1/pair",
+            &serde_json::json!({ "code": grant.code }),
+            Some(origin),
+        ))
+        .await
+        .expect("dashboard pair response");
     assert_eq!(response.status(), StatusCode::OK);
     response_json(response).await
 }

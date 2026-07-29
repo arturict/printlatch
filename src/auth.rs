@@ -93,7 +93,7 @@ pub fn normalize_origin(value: &str) -> Result<String> {
 }
 
 pub fn new_pairing_grant(db: &Database, origin: &str, name: &str) -> Result<PairingGrant> {
-    new_pairing_grant_for_session(db, origin, name, None)
+    new_pairing_grant_for_session(db, origin, name, None, false)
 }
 
 pub fn new_dashboard_pairing_grant(
@@ -106,7 +106,7 @@ pub fn new_dashboard_pairing_grant(
         valid_agent_session(instance_session),
         "agent session has an invalid shape"
     );
-    new_pairing_grant_for_session(db, origin, name, Some(instance_session))
+    new_pairing_grant_for_session(db, origin, name, Some(instance_session), true)
 }
 
 fn new_pairing_grant_for_session(
@@ -114,6 +114,7 @@ fn new_pairing_grant_for_session(
     origin: &str,
     name: &str,
     instance_session: Option<&str>,
+    reuse_client: bool,
 ) -> Result<PairingGrant> {
     let origin = normalize_origin(origin)?;
     let code = format_pairing_code(&random_bytes::<16>()?);
@@ -125,6 +126,7 @@ fn new_pairing_grant_for_session(
         name,
         expires_at,
         instance_session,
+        reuse_client,
     )?;
     Ok(PairingGrant {
         code,
@@ -157,7 +159,12 @@ pub fn consume_pairing_code(
         .map_err(AppError::internal)?
         .ok_or(AppError::Unauthorized)?;
     debug_assert_eq!(record.origin, origin);
-    issue_browser_token(db, &record.name, &origin, 30).map_err(AppError::internal)
+    if record.reuse_client {
+        issue_stable_browser_token(db, &record.name, &origin, 30).map_err(AppError::internal)
+    } else {
+        issue_token(db, &record.name, ClientKind::Browser, Some(&origin), 30)
+            .map_err(AppError::internal)
+    }
 }
 
 pub fn rotate_token(db: &Database, client_id: &str, days: i64) -> Result<IssuedToken> {
@@ -200,7 +207,12 @@ fn issue_token(
     })
 }
 
-fn issue_browser_token(db: &Database, name: &str, origin: &str, days: i64) -> Result<IssuedToken> {
+fn issue_stable_browser_token(
+    db: &Database,
+    name: &str,
+    origin: &str,
+    days: i64,
+) -> Result<IssuedToken> {
     let token = new_token()?;
     let candidate_id = Uuid::new_v4().to_string();
     let expires_at = Utc::now().timestamp() + days * 86_400;

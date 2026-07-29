@@ -14,18 +14,20 @@ PrintLatch never falls back to a LAN address or random port.
 
 ## Dashboard does not open or connect
 
-Run:
+Copy the recovery command shown in the dashboard overlay. It includes the exact
+running executable and active data directory, for example:
 
 ```powershell
-printlatch dashboard
+& "$env:LOCALAPPDATA\PrintLatch\bin\printlatch.exe" --data-dir "$env:LOCALAPPDATA\PrintLatch" dashboard --port 32191
 ```
 
 The command fails closed if the agent is not reachable or the listener on the
 configured port cannot prove it belongs to this PrintLatch installation. Start
-or restart the installed agent, then run it again. Each dashboard URL contains a
-one-time code in the URL fragment, is bound to that running agent session, and
-expires after five minutes. If a code is expired or already used, create a new
-URL instead of reusing it.
+or restart the installed agent, then run it again. Do not remove the
+`--data-dir` or `--port` argument from custom installations. Each dashboard URL
+contains a one-time code in the URL fragment, is bound to that running agent
+session, and expires after five minutes. If a code is expired or already used,
+create a new URL instead of reusing it.
 
 The dashboard keeps its token in browser session storage. Closing the browser
 session may require a new `printlatch dashboard` command. A fresh grant rotates

@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path as FsPath, PathBuf};
 
 use axum::{
     Json, Router,
@@ -123,11 +123,39 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-async fn operator_index() -> Response {
-    static_asset(
-        "text/html; charset=utf-8",
-        include_bytes!("../ui/index.html"),
-    )
+async fn operator_index(State(state): State<AppState>) -> Response {
+    let executable = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("printlatch.exe"));
+    operator_index_response(&executable, &state.config)
+}
+
+fn operator_index_response(executable: &FsPath, config: &AppConfig) -> Response {
+    let command = format!(
+        "& {} --data-dir {} dashboard --port {}",
+        powershell_literal(executable),
+        powershell_literal(&config.data_dir),
+        config.port
+    );
+    let document =
+        include_str!("../ui/index.html").replace("{{DASHBOARD_COMMAND}}", &html_escape(&command));
+    let mut response = Response::new(Body::from(document));
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("text/html; charset=utf-8"),
+    );
+    response
+}
+
+fn powershell_literal(path: &FsPath) -> String {
+    format!("'{}'", path.to_string_lossy().replace('\'', "''"))
+}
+
+fn html_escape(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
 }
 
 async fn operator_script() -> Response {
@@ -647,14 +675,30 @@ mod tests {
 
     #[tokio::test]
     async fn public_operator_assets_have_expected_types() {
+        let config = AppConfig {
+            data_dir: PathBuf::from(r"C:\Users\O'Brien & Co\PrintLatch"),
+            port: 32_199,
+        };
+        let response = operator_index_response(
+            FsPath::new(r"C:\Program Files\PrintLatch\printlatch.exe"),
+            &config,
+        );
         assert_eq!(
-            operator_index()
-                .await
+            response
                 .headers()
                 .get(header::CONTENT_TYPE)
                 .expect("content type"),
             "text/html; charset=utf-8"
         );
+        let document = http_body_util::BodyExt::collect(response.into_body())
+            .await
+            .expect("operator body")
+            .to_bytes();
+        let document = String::from_utf8(document.to_vec()).expect("operator HTML");
+        assert!(document.contains(
+            "C:\\Users\\O&#39;&#39;Brien &amp; Co\\PrintLatch&#39; dashboard --port 32199"
+        ));
+        assert!(!document.contains("{{DASHBOARD_COMMAND}}"));
         assert_eq!(
             operator_icon()
                 .await

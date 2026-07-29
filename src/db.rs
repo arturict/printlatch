@@ -16,6 +16,7 @@ pub struct Database {
 pub struct PairingRecord {
     pub origin: String,
     pub name: String,
+    pub reuse_client: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -88,7 +89,8 @@ impl Database {
                 name TEXT NOT NULL,
                 expires_at INTEGER NOT NULL,
                 consumed_at INTEGER,
-                instance_session TEXT
+                instance_session TEXT,
+                reuse_client INTEGER NOT NULL DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS instance_identity (
                 slot INTEGER PRIMARY KEY CHECK (slot = 1),
@@ -130,6 +132,21 @@ impl Database {
                 [],
             )?;
         }
+        let pairing_has_reuse_client: bool = connection.query_row(
+            "SELECT EXISTS(
+                SELECT 1 FROM pragma_table_info('pairing_codes')
+                WHERE name = 'reuse_client'
+            )",
+            [],
+            |row| row.get(0),
+        )?;
+        if !pairing_has_reuse_client {
+            connection.execute(
+                "ALTER TABLE pairing_codes
+                 ADD COLUMN reuse_client INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
         Ok(())
     }
 
@@ -152,6 +169,7 @@ impl Database {
         name: &str,
         expires_at: i64,
         instance_session: Option<&str>,
+        reuse_client: bool,
     ) -> Result<()> {
         let now = Utc::now().timestamp();
         let mut connection = self.connect()?;
@@ -162,9 +180,16 @@ impl Database {
         )?;
         transaction.execute(
             "INSERT INTO pairing_codes
-             (code_hash, origin, name, expires_at, instance_session)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![code_hash, origin, name, expires_at, instance_session],
+             (code_hash, origin, name, expires_at, instance_session, reuse_client)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                code_hash,
+                origin,
+                name,
+                expires_at,
+                instance_session,
+                reuse_client
+            ],
         )?;
         transaction.commit()?;
         Ok(())
@@ -181,7 +206,7 @@ impl Database {
         let transaction = connection.transaction()?;
         let record = transaction
             .query_row(
-                "SELECT origin, name FROM pairing_codes
+                "SELECT origin, name, reuse_client FROM pairing_codes
                  WHERE code_hash = ?1 AND origin = ?2 AND expires_at >= ?3
                    AND consumed_at IS NULL
                    AND (instance_session IS NULL OR instance_session = ?4)",
@@ -190,6 +215,7 @@ impl Database {
                     Ok(PairingRecord {
                         origin: row.get(0)?,
                         name: row.get(1)?,
+                        reuse_client: row.get(2)?,
                     })
                 },
             )
@@ -545,4 +571,46 @@ fn job_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Job> {
         created_at: row.get(11)?,
         updated_at: row.get(12)?,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn migrates_existing_pairing_codes_to_explicit_non_reuse() {
+        let temp = tempfile::tempdir().expect("temporary directory");
+        let path = temp.path().join("migration.sqlite3");
+        let connection = Connection::open(&path).expect("legacy database");
+        connection
+            .execute_batch(
+                "
+                CREATE TABLE pairing_codes (
+                    code_hash TEXT PRIMARY KEY,
+                    origin TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    expires_at INTEGER NOT NULL,
+                    consumed_at INTEGER
+                );
+                INSERT INTO pairing_codes
+                    (code_hash, origin, name, expires_at, consumed_at)
+                VALUES ('legacy', 'https://app.example', 'Browser app', 1, NULL);
+                ",
+            )
+            .expect("legacy pairing table");
+        drop(connection);
+
+        let db = Database::open(&path).expect("migrated database");
+        let connection = db.connect().expect("migrated connection");
+        let (session, reuse_client): (Option<String>, bool) = connection
+            .query_row(
+                "SELECT instance_session, reuse_client
+                 FROM pairing_codes WHERE code_hash = 'legacy'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("migrated pairing record");
+        assert!(session.is_none());
+        assert!(!reuse_client);
+    }
 }

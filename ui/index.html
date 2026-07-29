@@ -298,9 +298,9 @@
                   </button>
                 </div>
                 <div class="code-block large-code">
-                  <pre><code id="node-code">import { PrintLatch } from "@printlatch/sdk";
+                  <pre><code id="node-code">import { PrintLatchClient } from "@printlatch/sdk";
 
-const client = new PrintLatch({
+const client = new PrintLatchClient({
   token: process.env.PRINTLATCH_TOKEN,
 });
 
@@ -403,7 +403,7 @@ const preview = await client.createJob({
           Open a fresh, one-time dashboard link from PowerShell. No print endpoint becomes public.
         </p>
         <div class="code-block">
-          <pre><code id="dashboard-command">printlatch dashboard</code></pre>
+          <pre><code id="dashboard-command">{{DASHBOARD_COMMAND}}</code></pre>
           <button class="copy-button" type="button" data-copy="dashboard-command">Copy</button>
         </div>
         <details class="manual-pairing">

@@ -124,6 +124,8 @@ Agent data: [local path redacted]
 
 Paste the code into the named web application. The agent returns a browser token
 only when the request's `Origin` exactly matches the origin bound to the code.
+Each application grant creates an independent client and job history, even when
+its name and origin match an earlier grant.
 The code is consumed once.
 
 ## Use from Node.js

@@ -42,7 +42,10 @@ Browser only. Requires the browser-provided `Origin` header.
 ```
 
 Returns a browser token once. The local CLI must have created the code for the
-same exact origin within five minutes.
+same exact origin within five minutes. Every ordinary application grant creates
+an independent client and job history, even when another client has the same
+name and origin. Only session-bound grants created by `printlatch dashboard`
+rotate the built-in dashboard's stable operator credential.
 
 ## `GET /v1/printers`
 
