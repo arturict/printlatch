@@ -84,13 +84,14 @@ Run this locally:
 printlatch pair --origin https://app.example --name "Invoice app"
 ```
 
-Actual output:
+Actual output from release candidate `114bf2b` on Windows 11 x64. The local
+data path is redacted, and this one-time code is expired:
 
 ```text
-Pairing code: PL-<one-time-code>
+Pairing code: PL-7D5B0F18-56C7C069-4DDA89E8-8D940CE6
 Origin: https://app.example
-Expires at (Unix): <five-minutes-from-now>
-Agent data: C:\Users\<you>\AppData\Local\PrintLatch
+Expires at (Unix): 1785341691
+Agent data: [local path redacted]
 ```
 
 Paste the code into the named web application. The agent returns a browser token
@@ -145,6 +146,18 @@ drivers do not provide a reliable end-to-end physical-output confirmation.
 
 See the live [hardware evidence matrix](docs/testing/hardware-matrix.md) for the
 exact devices and paths actually exercised.
+
+Real target enumeration from the same Windows 11 x64 release candidate:
+
+```text
+capture:pdf  PrintLatch PDF Capture          capture        verified
+win:f5a...   Microsoft Print to PDF           windows_local  discovered
+win:d116...  Brother MFC-J5340DW Printer      windows_local  discovered
+win:c21d...  Adobe PDF                        windows_local  discovered
+```
+
+`discovered` means Windows reported the installed driver. It does not claim
+that PrintLatch produced physical paper on that device.
 
 ## Security summary
 
