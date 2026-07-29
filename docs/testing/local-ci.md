@@ -28,9 +28,12 @@ docker run --rm `
   -e CARGO_TARGET_DIR=/tmp/printlatch-target `
   rust:1.94.1 `
   bash -c 'cargo fmt --all -- --check &&
+    cargo check --locked --all-targets &&
     cargo test --locked --all-targets &&
     cargo clippy --locked --all-targets --all-features -- -D warnings &&
-    cargo build --locked --release'
+    cargo build --locked --release &&
+    cargo install cargo-audit --locked --version 0.22.1 &&
+    cargo audit'
 ```
 
 ## Native Windows build and release smoke
@@ -40,10 +43,39 @@ Windows SDK. Run in an x64 Visual Studio Developer PowerShell:
 
 ```powershell
 cargo fmt --all -- --check
+cargo check --locked --all-targets
 cargo test --locked --all-targets
 cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo build --locked --release
-.\scripts\smoke-release.ps1 -ArchiveRoot .\artifacts\printlatch-v0.1.1-windows-x64
+cargo install cargo-audit --locked --version 0.22.1
+cargo audit
+
+$version = (cargo metadata --no-deps --format-version 1 |
+  ConvertFrom-Json).packages[0].version
+$stage = ".\artifacts\printlatch-v$version-windows-x64"
+New-Item -ItemType Directory -Force `
+  "$stage\docs\assets", "$stage\examples", "$stage\packages\sdk\dist" |
+  Out-Null
+Copy-Item .\target\release\printlatch.exe "$stage\printlatch.exe"
+Copy-Item -Path @(
+  ".\scripts\install.ps1"
+  ".\scripts\uninstall.ps1"
+  ".\scripts\smoke-release.ps1"
+) -Destination $stage
+Copy-Item .\docs\assets\sample.pdf "$stage\docs\assets\sample.pdf"
+Copy-Item .\examples\*.js, .\examples\*.mjs "$stage\examples\"
+Copy-Item .\packages\sdk\dist\* "$stage\packages\sdk\dist\"
+Copy-Item -Path @(
+  ".\packages\sdk\package.json"
+  ".\packages\sdk\README.md"
+) -Destination "$stage\packages\sdk\"
+Copy-Item -Path @(
+  ".\README.md"
+  ".\LICENSE"
+  ".\NOTICE"
+  ".\SECURITY.md"
+) -Destination $stage
+.\scripts\smoke-release.ps1 -ArchiveRoot $stage
 ```
 
 The smoke uses isolated temporary program and data directories. It installs the
@@ -53,8 +85,21 @@ task and files.
 
 ## Browser operator flow
 
-Start the release candidate with an isolated data directory, run
-`printlatch dashboard`, and verify:
+Start the release candidate with an isolated data directory and port:
+
+```powershell
+$dataDir = Join-Path $env:TEMP "printlatch-browser-smoke"
+.\printlatch.exe serve --data-dir $dataDir --port 4317
+```
+
+In a second PowerShell window, pass the same values to the dashboard command:
+
+```powershell
+$dataDir = Join-Path $env:TEMP "printlatch-browser-smoke"
+.\printlatch.exe dashboard --data-dir $dataDir --port 4317
+```
+
+Then verify:
 
 1. one-time pairing and target detection
 2. authenticated test-PDF preview

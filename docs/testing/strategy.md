@@ -67,10 +67,8 @@ smoke sequence checks:
 4. preview job and authenticated document download
 5. PDF capture print and output hash
 6. invalid MIME failure
-7. queued cancel behavior
-8. agent restart recovery
-9. uninstall while preserving data
-10. purge uninstall in the isolated test directory
+7. uninstall while preserving data
+8. purge uninstall in the isolated test directory
 
 ## Operator browser smoke
 
