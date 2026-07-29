@@ -14,6 +14,7 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm audit --audit-level high
 ```
 
 ## Rust on a pinned Linux container
@@ -78,25 +79,39 @@ Copy-Item -Path @(
 .\scripts\smoke-release.ps1 -ArchiveRoot $stage
 ```
 
-The smoke uses isolated temporary program and data directories. It installs the
-per-user task, checks health, pairing, authenticated preview, capture hash,
-invalid MIME rejection, and both uninstall modes, then removes its temporary
-task and files.
+The smoke chooses an unused loopback port and uses isolated temporary program
+and data directories. It installs with `-NoStartup`, checks health, pairing,
+authenticated preview, capture hash, invalid MIME rejection, and both uninstall
+modes, then removes its temporary files. Scheduled-task registration is not
+claimed by this smoke.
 
 ## Browser operator flow
 
 Start the release candidate with an isolated data directory and port:
 
 ```powershell
-$dataDir = Join-Path $env:TEMP "printlatch-browser-smoke"
-.\printlatch.exe serve --data-dir $dataDir --port 4317
+$dataDir = Join-Path $env:TEMP (
+  "printlatch-browser-smoke-" + [guid]::NewGuid().ToString("N")
+)
+$portProbe = [System.Net.Sockets.TcpListener]::new(
+  [System.Net.IPAddress]::Loopback,
+  0
+)
+$portProbe.Start()
+$port = ([System.Net.IPEndPoint]$portProbe.LocalEndpoint).Port
+$portProbe.Stop()
+$dataDir
+$port
+.\target\release\printlatch.exe serve --data-dir $dataDir --port $port
 ```
 
-In a second PowerShell window, pass the same values to the dashboard command:
+In a second PowerShell window, paste the exact data path printed by the first
+window and its printed port:
 
 ```powershell
-$dataDir = Join-Path $env:TEMP "printlatch-browser-smoke"
-.\printlatch.exe dashboard --data-dir $dataDir --port 4317
+$dataDir = "<paste the path printed by the first window>"
+$port = <paste the port printed by the first window>
+.\target\release\printlatch.exe dashboard --data-dir $dataDir --port $port
 ```
 
 Then verify:
@@ -111,6 +126,12 @@ Then verify:
 8. no browser console errors
 
 Do not select a physical printer during this gate.
+After stopping the agent, remove only the unique data directory created for
+this run:
+
+```powershell
+Remove-Item -LiteralPath $dataDir -Recurse -Force
+```
 
 ## Cost-control state
 

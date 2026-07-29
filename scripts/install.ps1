@@ -3,6 +3,8 @@ param(
     [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA "PrintLatch\bin"),
     [string]$DataDir = (Join-Path $env:LOCALAPPDATA "PrintLatch"),
     [string]$TaskName = "PrintLatch Agent",
+    [ValidateRange(1, 65535)]
+    [int]$Port = 32191,
     [switch]$NoStartup,
     [switch]$NoDashboard
 )
@@ -28,7 +30,7 @@ if (Test-Path -LiteralPath $sourceUninstaller -PathType Leaf) {
 }
 
 $quotedDataDir = '"' + $resolvedDataDir.Replace('"', '""') + '"'
-$arguments = "--data-dir $quotedDataDir serve"
+$arguments = "--data-dir $quotedDataDir serve --port $Port"
 
 if (-not $NoStartup) {
     $action = New-ScheduledTaskAction -Execute $destinationExe -Argument $arguments
@@ -41,7 +43,7 @@ $process = Start-Process -FilePath $destinationExe -ArgumentList $arguments -Win
 $healthy = $false
 for ($attempt = 0; $attempt -lt 30; $attempt++) {
     try {
-        $health = Invoke-RestMethod -Uri "http://127.0.0.1:32191/health" -Headers @{ Host = "127.0.0.1:32191" } -TimeoutSec 2
+        $health = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/health" -Headers @{ Host = "127.0.0.1:$Port" } -TimeoutSec 2
         if ($health.status -eq "ok" -and $health.product -eq "PrintLatch") {
             $healthy = $true
             break
@@ -53,7 +55,7 @@ for ($attempt = 0; $attempt -lt 30; $attempt++) {
 
 if (-not $healthy) {
     Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-    throw "PrintLatch did not become healthy on http://127.0.0.1:32191"
+    throw "PrintLatch did not become healthy on http://127.0.0.1:$Port"
 }
 
 Write-Host "Installed PrintLatch at $destinationExe"
@@ -61,5 +63,5 @@ Write-Host "Data directory: $resolvedDataDir"
 Write-Host "Health: ok"
 
 if (-not $NoDashboard) {
-    & $destinationExe --data-dir $resolvedDataDir dashboard
+    & $destinationExe --data-dir $resolvedDataDir dashboard --port $Port
 }

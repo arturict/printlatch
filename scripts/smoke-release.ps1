@@ -1,6 +1,8 @@
 [CmdletBinding()]
 param(
-    [string]$ArchiveRoot
+    [string]$ArchiveRoot,
+    [ValidateRange(0, 65535)]
+    [int]$Port = 0
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,7 +19,16 @@ $dataDir = Join-Path $env:LOCALAPPDATA "PrintLatchSmoke-$runId\data"
 $taskName = "PrintLatch Smoke $runId"
 $exe = Join-Path $installRoot "printlatch.exe"
 $sample = Join-Path $ArchiveRoot "docs\assets\sample.pdf"
-$baseUri = "http://127.0.0.1:32191"
+if ($Port -eq 0) {
+    $portProbe = [System.Net.Sockets.TcpListener]::new(
+        [System.Net.IPAddress]::Loopback,
+        0
+    )
+    $portProbe.Start()
+    $Port = ([System.Net.IPEndPoint]$portProbe.LocalEndpoint).Port
+    $portProbe.Stop()
+}
+$baseUri = "http://127.0.0.1:$Port"
 
 function New-ApiClient {
     param([string]$Token)
@@ -56,6 +67,7 @@ try {
         -InstallRoot $installRoot `
         -DataDir $dataDir `
         -TaskName $taskName `
+        -Port $Port `
         -NoStartup `
         -NoDashboard
 
