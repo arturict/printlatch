@@ -1,7 +1,15 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.6/schema.json",
   "files": {
-    "includes": ["**", "!target", "!site/public", "!outputs", "!packages/sdk/dist"]
+    "includes": [
+      "**",
+      "!target",
+      "!site/public",
+      "!outputs",
+      "!packages/sdk/dist",
+      "!**/.vercel",
+      "!**/.env.local"
+    ]
   },
   "formatter": {
     "enabled": true,
