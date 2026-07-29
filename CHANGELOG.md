@@ -25,9 +25,12 @@ All notable changes are documented here. This project uses semantic versioning.
 - fresh dashboard grants rotate one stable operator credential so queue history
   remains available while the previous token is invalidated
 - ordinary application pairing grants remain independent even when client names
-  and origins match, preventing cross-session history access
+  and origins match; a dedicated internal marker identifies the dashboard
 - every active dashboard job now keeps an independent polling loop
+- transient job-status requests retry automatically with a bounded backoff
 - the bundled test PDF now requires the paired dashboard token
+- CORS and Private Network Access headers are now restricted to `/v1/*`, so the
+  operator shell never grants cross-origin read access
 - dashboard recovery commands include the running executable, active data
   directory, and port
 - the embedded Node example uses the SDK's exported `PrintLatchClient`

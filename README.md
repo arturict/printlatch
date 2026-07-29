@@ -201,6 +201,9 @@ that PrintLatch produced physical paper on that device.
 - Dashboard grants also require an HMAC-proven local installation and are bound
   to the current agent session, so a listener on the configured port cannot
   capture a grant for a later agent restart.
+- CORS and Private Network Access headers are emitted only for `/v1/*` API
+  routes. The operator shell and its local recovery command are never readable
+  cross-origin.
 - Tokens are stored as SHA-256 digests, expire, rotate, and revoke.
 - Unknown multipart fields are rejected, so PrintLatch cannot be used as an SSRF
   fetcher.
