@@ -370,8 +370,9 @@ h1 em {
 
 .pairing strong {
   color: var(--mint);
-  font-size: 20px;
-  letter-spacing: 0.05em;
+  font-size: clamp(10px, 2.2vw, 20px);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
 }
 
 .pairing small {
