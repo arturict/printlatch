@@ -1,6 +1,8 @@
 use std::{fs, path::Path};
 
-use anyhow::{Context, Result, bail};
+#[cfg(not(windows))]
+use anyhow::bail;
+use anyhow::{Context, Result};
 use serde::Serialize;
 #[cfg(any(windows, test))]
 use sha2::{Digest, Sha256};
@@ -84,7 +86,10 @@ fn platform_printers() -> Result<Vec<PrinterInfo>> {
 
 #[cfg(windows)]
 fn platform_submit(printer_id_value: &str, pdf_path: &Path, copies: u8) -> Result<String> {
-    use winprint::printer::{FilePrinter, PrinterDevice, WinPdfPrinter};
+    use winprint::{
+        printer::{FilePrinter, PrinterDevice, WinPdfPrinter},
+        ticket::PrintTicket,
+    };
 
     let device = PrinterDevice::all()
         .context("Windows printer enumeration failed")?
@@ -95,7 +100,7 @@ fn platform_submit(printer_id_value: &str, pdf_path: &Path, copies: u8) -> Resul
     let printer = WinPdfPrinter::new(device);
     for copy in 0..copies {
         printer
-            .print(pdf_path, Default::default())
+            .print(pdf_path, PrintTicket::default())
             .with_context(|| format!("Windows rejected copy {}", copy + 1))?;
     }
     Ok(format!(

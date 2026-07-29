@@ -53,7 +53,7 @@ pub fn default_data_dir() -> Result<PathBuf> {
         let base = env::var_os("LOCALAPPDATA")
             .map(PathBuf::from)
             .context("LOCALAPPDATA is not set")?;
-        return Ok(base.join("PrintLatch"));
+        Ok(base.join("PrintLatch"))
     }
 
     #[cfg(not(windows))]

@@ -60,9 +60,13 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-      - uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          toolchain: 1.94.1
+      - name: Install pinned cargo-audit
+        run: cargo install cargo-audit --locked --version 0.22.1
+      - name: Audit locked dependency graph
+        run: cargo audit
 
   secret-scan:
     name: Secret scan
