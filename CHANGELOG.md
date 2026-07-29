@@ -4,6 +4,8 @@ All notable changes are documented here. This project uses semantic versioning.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-29
+
 ### Added
 
 - embedded, origin-bound local operator dashboard
@@ -35,5 +37,6 @@ All notable changes are documented here. This project uses semantic versioning.
 - security, architecture, API, hardware, and troubleshooting documentation
 - local, CI, release, and smoke workflows
 
-[Unreleased]: https://github.com/arturict/printlatch/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/arturict/printlatch/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/arturict/printlatch/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/arturict/printlatch/releases/tag/v0.1.0

@@ -7,7 +7,7 @@ web app or local Node.js process submit PDF print jobs to printers already
 installed in Windows. Documents stay on the machine. There is no PrintLatch
 cloud, account, certificate subscription, or telemetry.
 
-> Release status: `0.1.0` is Windows 11 x64 only. PDF capture is fully testable
+> Release status: `0.1.1` is Windows 11 x64 only. PDF capture is fully testable
 > without a printer. Windows printer discovery and submission use the native
 > print pipeline. No label, receipt, raw ESC/POS, ZPL, macOS, or Linux support is
 > claimed in this release.
@@ -55,12 +55,12 @@ commands or process arguments.
 
 ## Install
 
-1. Download `printlatch-v0.1.0-windows-x64.zip` and `SHA256SUMS.txt` from the
+1. Download `printlatch-v0.1.1-windows-x64.zip` and `SHA256SUMS.txt` from the
    [GitHub release](https://github.com/arturict/printlatch/releases/latest).
 2. Verify the archive hash:
 
    ```powershell
-   Get-FileHash .\printlatch-v0.1.0-windows-x64.zip -Algorithm SHA256
+   Get-FileHash .\printlatch-v0.1.1-windows-x64.zip -Algorithm SHA256
    ```
 
 3. Extract the archive and run:
