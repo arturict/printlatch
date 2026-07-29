@@ -124,6 +124,8 @@ Then verify:
 6. retry after a transient health or status failure
 7. desktop and 375 px layouts without horizontal overflow
 8. no browser console errors
+9. the no-Windows-printer empty state when the isolated environment has none
+10. screen-reader-visible live status announcements for queue transitions
 
 Do not select a physical printer during this gate.
 After stopping the agent, remove only the unique data directory created for
