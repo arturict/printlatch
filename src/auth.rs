@@ -263,4 +263,15 @@ mod tests {
         assert_eq!(code, "PL-07070707-07070707-07070707-07070707");
         assert_eq!(code.split('-').count(), 5);
     }
+
+    #[test]
+    fn pairing_codes_encode_all_128_bits() {
+        let mut bytes = [0; 16];
+        let zero_code = format_pairing_code(&bytes);
+        bytes[15] = 0xff;
+        let last_bit_group_changed = format_pairing_code(&bytes);
+
+        assert_ne!(zero_code, last_bit_group_changed);
+        assert!(last_bit_group_changed.ends_with("000000FF"));
+    }
 }
