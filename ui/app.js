@@ -1,4 +1,4 @@
-import { canRetry, formatState, jobDiagnosis } from "/app/model.js";
+import { activeJobIds, canRetry, formatState, jobDiagnosis } from "/app/model.js";
 
 const SESSION_TOKEN_KEY = "printlatch.dashboard.token";
 const ACTIVE_JOB_KEY = "printlatch.dashboard.activeJob";
@@ -20,7 +20,7 @@ const appState = {
   connected: false,
   refreshing: false,
   pairingInProgress: false,
-  pollingTimer: null,
+  pollingTimers: new Map(),
 };
 
 const elements = {
@@ -484,7 +484,7 @@ function renderJobs() {
     elements.jobsList.replaceChildren(
       emptyState(
         "≡",
-        "No jobs in this dashboard session",
+        "No jobs yet",
         "Run the safe capture from Overview, or submit a PDF with the SDK.",
         "Go to safe capture",
         () => navigate("overview"),
@@ -556,7 +556,7 @@ function formatBytes(bytes) {
 }
 
 async function testPdf() {
-  const response = await api("/app/test-page.pdf", {}, false);
+  const response = await api("/app/test-page.pdf");
   return response.blob();
 }
 
@@ -659,7 +659,10 @@ async function runConfirmedJob(event) {
 }
 
 async function watchJob(id) {
-  window.clearTimeout(appState.pollingTimer);
+  if (appState.pollingTimers.has(id)) {
+    return;
+  }
+  appState.pollingTimers.set(id, null);
   let previousState = appState.jobs.find((job) => job.id === id)?.state;
   const poll = async () => {
     try {
@@ -677,9 +680,12 @@ async function watchJob(id) {
         previousState = body.job.state;
       }
       if (["queued", "printing"].includes(body.job.state)) {
-        appState.pollingTimer = window.setTimeout(poll, 700);
+        appState.pollingTimers.set(id, window.setTimeout(poll, 700));
       } else {
-        localStorage.removeItem(ACTIVE_JOB_KEY);
+        appState.pollingTimers.delete(id);
+        if (localStorage.getItem(ACTIVE_JOB_KEY) === id) {
+          localStorage.removeItem(ACTIVE_JOB_KEY);
+        }
         if (body.job.state === "succeeded") {
           toast(
             body.job.printer_id === "capture:pdf"
@@ -692,8 +698,10 @@ async function watchJob(id) {
         } else if (["failed", "unknown"].includes(body.job.state)) {
           toast(jobDiagnosis(body.job).title, "error");
         }
+        watchActiveJobs();
       }
     } catch (error) {
+      appState.pollingTimers.delete(id);
       toast(`Could not refresh job: ${error.message}`, "error");
     }
   };
@@ -701,11 +709,8 @@ async function watchJob(id) {
 }
 
 function watchActiveJobs() {
-  const active =
-    appState.jobs.find((job) => ["queued", "printing"].includes(job.state)) ||
-    appState.jobs.find((job) => job.id === localStorage.getItem(ACTIVE_JOB_KEY));
-  if (active) {
-    watchJob(active.id);
+  for (const id of activeJobIds(appState.jobs, localStorage.getItem(ACTIVE_JOB_KEY))) {
+    watchJob(id);
   }
 }
 

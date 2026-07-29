@@ -87,10 +87,11 @@ If the dashboard is not already open, run:
 printlatch dashboard
 ```
 
-The command checks that the agent is reachable, creates a one-time grant bound
-to the exact loopback dashboard origin, and opens the URL in the default
-browser. The token remains in browser session storage, while non-secret setup
-progress is inferred from the real printer list and queue.
+The command verifies the running agent against this local installation, creates
+a one-time grant bound to that agent session and the exact loopback dashboard
+origin, and opens the URL in the default browser. The token remains in browser
+session storage. A fresh dashboard grant rotates the same operator credential,
+invalidates its previous token, and retains its queue history.
 
 The first-run path deliberately avoids physical output:
 
@@ -195,6 +196,9 @@ that PrintLatch produced physical paper on that device.
   matches the current loopback Host. Local tokens reject all requests carrying
   an `Origin`.
 - Pairing codes are 128-bit, origin-bound, five-minute, and one-time.
+- Dashboard grants also require an HMAC-proven local installation and are bound
+  to the current agent session, so a listener on the configured port cannot
+  capture a grant for a later agent restart.
 - Tokens are stored as SHA-256 digests, expire, rotate, and revoke.
 - Unknown multipart fields are rejected, so PrintLatch cannot be used as an SSRF
   fetcher.

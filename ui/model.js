@@ -15,6 +15,12 @@ export function canRetry(job) {
   return (job.state === "failed" || job.state === "unknown") && job.attempts < 3;
 }
 
+export function activeJobIds(jobs, rememberedId = null) {
+  return jobs
+    .filter((job) => job.state === "queued" || job.state === "printing" || job.id === rememberedId)
+    .map((job) => job.id);
+}
+
 export function jobDiagnosis(job) {
   if (job.state === "unknown") {
     return {

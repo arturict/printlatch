@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canRetry, formatState, jobDiagnosis } from "./model.js";
+import { activeJobIds, canRetry, formatState, jobDiagnosis } from "./model.js";
 
 describe("operator job states", () => {
   it("uses explicit human-readable labels for every queue state", () => {
@@ -31,5 +31,18 @@ describe("operator job states", () => {
     expect(canRetry({ state: "unknown", attempts: 2 })).toBe(true);
     expect(canRetry({ state: "failed", attempts: 3 })).toBe(false);
     expect(canRetry({ state: "succeeded", attempts: 1 })).toBe(false);
+  });
+
+  it("keeps every active job in the polling set", () => {
+    expect(
+      activeJobIds([
+        { id: "queued", state: "queued" },
+        { id: "printing", state: "printing" },
+        { id: "done", state: "succeeded" },
+      ]),
+    ).toEqual(["queued", "printing"]);
+    expect(activeJobIds([{ id: "remembered", state: "unknown" }], "remembered")).toEqual([
+      "remembered",
+    ]);
   });
 });

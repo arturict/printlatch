@@ -20,14 +20,17 @@ Run:
 printlatch dashboard
 ```
 
-The command fails closed if the agent is not reachable. Start the agent, then
-run it again. Each dashboard URL contains a one-time code in the URL fragment
-and expires after five minutes. If a code is expired or already used, create a
-new URL instead of reusing it.
+The command fails closed if the agent is not reachable or the listener on the
+configured port cannot prove it belongs to this PrintLatch installation. Start
+or restart the installed agent, then run it again. Each dashboard URL contains a
+one-time code in the URL fragment, is bound to that running agent session, and
+expires after five minutes. If a code is expired or already used, create a new
+URL instead of reusing it.
 
 The dashboard keeps its token in browser session storage. Closing the browser
-session may require a new `printlatch dashboard` command. Setup progress itself
-is reconstructed from the current printer list and queue.
+session may require a new `printlatch dashboard` command. A fresh grant rotates
+the stable dashboard credential and invalidates the old token, while its queue
+history remains available to reconstruct setup progress.
 
 ## Browser cannot connect
 

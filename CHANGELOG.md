@@ -20,6 +20,12 @@ All notable changes are documented here. This project uses semantic versioning.
 
 - local dashboard GET authentication now accepts browser-proven same-origin
   requests only when the stored loopback origin matches the current Host
+- dashboard launch verifies the local installation with an HMAC challenge and
+  binds the grant to the current agent session
+- fresh dashboard grants rotate one stable operator credential so queue history
+  remains available while the previous token is invalidated
+- every active dashboard job now keeps an independent polling loop
+- the bundled test PDF now requires the paired dashboard token
 
 ## [0.1.0] - 2026-07-29
 

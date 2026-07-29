@@ -87,7 +87,12 @@ impl Database {
                 origin TEXT NOT NULL,
                 name TEXT NOT NULL,
                 expires_at INTEGER NOT NULL,
-                consumed_at INTEGER
+                consumed_at INTEGER,
+                instance_session TEXT
+            );
+            CREATE TABLE IF NOT EXISTS instance_identity (
+                slot INTEGER PRIMARY KEY CHECK (slot = 1),
+                secret TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS jobs (
                 id TEXT PRIMARY KEY,
@@ -111,6 +116,20 @@ impl Database {
                 ON jobs(state, created_at);
             ",
         )?;
+        let pairing_has_session: bool = connection.query_row(
+            "SELECT EXISTS(
+                SELECT 1 FROM pragma_table_info('pairing_codes')
+                WHERE name = 'instance_session'
+            )",
+            [],
+            |row| row.get(0),
+        )?;
+        if !pairing_has_session {
+            connection.execute(
+                "ALTER TABLE pairing_codes ADD COLUMN instance_session TEXT",
+                [],
+            )?;
+        }
         Ok(())
     }
 
@@ -132,6 +151,7 @@ impl Database {
         origin: &str,
         name: &str,
         expires_at: i64,
+        instance_session: Option<&str>,
     ) -> Result<()> {
         let now = Utc::now().timestamp();
         let mut connection = self.connect()?;
@@ -141,9 +161,10 @@ impl Database {
             [now],
         )?;
         transaction.execute(
-            "INSERT INTO pairing_codes (code_hash, origin, name, expires_at)
-             VALUES (?1, ?2, ?3, ?4)",
-            params![code_hash, origin, name, expires_at],
+            "INSERT INTO pairing_codes
+             (code_hash, origin, name, expires_at, instance_session)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![code_hash, origin, name, expires_at, instance_session],
         )?;
         transaction.commit()?;
         Ok(())
@@ -154,6 +175,7 @@ impl Database {
         code_hash: &str,
         origin: &str,
         now: i64,
+        instance_session: &str,
     ) -> Result<Option<PairingRecord>> {
         let mut connection = self.connect()?;
         let transaction = connection.transaction()?;
@@ -161,8 +183,9 @@ impl Database {
             .query_row(
                 "SELECT origin, name FROM pairing_codes
                  WHERE code_hash = ?1 AND origin = ?2 AND expires_at >= ?3
-                   AND consumed_at IS NULL",
-                params![code_hash, origin, now],
+                   AND consumed_at IS NULL
+                   AND (instance_session IS NULL OR instance_session = ?4)",
+                params![code_hash, origin, now, instance_session],
                 |row| {
                     Ok(PairingRecord {
                         origin: row.get(0)?,
@@ -180,6 +203,22 @@ impl Database {
         }
         transaction.commit()?;
         Ok(record)
+    }
+
+    pub fn get_or_create_instance_secret(&self, candidate: &str) -> Result<String> {
+        let mut connection = self.connect()?;
+        let transaction = connection.transaction()?;
+        transaction.execute(
+            "INSERT OR IGNORE INTO instance_identity (slot, secret) VALUES (1, ?1)",
+            [candidate],
+        )?;
+        let secret = transaction.query_row(
+            "SELECT secret FROM instance_identity WHERE slot = 1",
+            [],
+            |row| row.get(0),
+        )?;
+        transaction.commit()?;
+        Ok(secret)
     }
 
     pub fn insert_client(
@@ -206,6 +245,63 @@ impl Database {
             ],
         )?;
         Ok(())
+    }
+
+    pub fn rotate_or_insert_browser_client(
+        &self,
+        new_id: &str,
+        name: &str,
+        origin: &str,
+        token_hash: &str,
+        expires_at: i64,
+    ) -> Result<String> {
+        let now = Utc::now().timestamp();
+        let mut connection = self.connect()?;
+        let transaction = connection.transaction()?;
+        let existing_id = transaction
+            .query_row(
+                "SELECT id FROM clients
+                 WHERE kind = 'browser' AND name = ?1 AND origin = ?2
+                   AND revoked_at IS NULL
+                 ORDER BY created_at DESC LIMIT 1",
+                params![name, origin],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        let client_id = if let Some(existing_id) = existing_id {
+            transaction.execute(
+                "UPDATE jobs SET client_id = ?1
+                 WHERE client_id IN (
+                    SELECT id FROM clients
+                    WHERE kind = 'browser' AND name = ?2 AND origin = ?3
+                      AND revoked_at IS NULL AND id <> ?1
+                 )",
+                params![existing_id, name, origin],
+            )?;
+            transaction.execute(
+                "UPDATE clients SET revoked_at = ?1
+                 WHERE kind = 'browser' AND name = ?2 AND origin = ?3
+                   AND revoked_at IS NULL AND id <> ?4",
+                params![now, name, origin, existing_id],
+            )?;
+            transaction.execute(
+                "UPDATE clients
+                 SET token_hash = ?1, expires_at = ?2
+                 WHERE id = ?3 AND revoked_at IS NULL",
+                params![token_hash, expires_at, existing_id],
+            )?;
+            existing_id
+        } else {
+            transaction.execute(
+                "INSERT INTO clients
+                 (id, name, kind, origin, token_hash, expires_at, created_at)
+                 VALUES (?1, ?2, 'browser', ?3, ?4, ?5, ?6)",
+                params![new_id, name, origin, token_hash, expires_at, now],
+            )?;
+            new_id.to_owned()
+        };
+        transaction.commit()?;
+        Ok(client_id)
     }
 
     pub fn get_client(&self, id: &str) -> Result<Option<AuthenticatedClient>> {

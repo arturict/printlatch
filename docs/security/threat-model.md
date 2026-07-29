@@ -38,6 +38,7 @@ Version: 0.1.1
 | Unauthenticated localhost print | All printer, job, document, cancel, and retry routes require a token | `tests/security.rs` |
 | Cross-site request or token replay | No cookies; browser token requires exact paired `Origin`; local tokens reject every request with `Origin` | browser-origin tests |
 | Pairing-code replay | 128-bit code, five-minute expiry, exact origin in the database transaction, one-time consumption | pairing replay test |
+| Local port impersonation | CLI verifies an HMAC challenge from installation-local state; dashboard grants are bound to the proven random agent session | real-agent and spoofed-listener tests |
 | DNS rebinding | Fixed `127.0.0.1` bind and exact `Host` allow-list | rebinding test |
 | WebSocket origin bypass | No WebSocket route; all upgrade attempts rejected | upgrade test |
 | SSRF | No URL ingestion; every unknown multipart field is rejected | metadata-IP field test |
@@ -49,6 +50,7 @@ Version: 0.1.1
 | Queue double claim | Atomic SQLite `UPDATE ... RETURNING` state transition | concurrent claim/cancel test |
 | Restart duplicate | `printing` becomes `unknown`; no automatic replay | restart test |
 | Cross-client document access | Every job lookup is scoped by authenticated client ID | isolation test |
+| Dashboard re-pair history loss | Fresh grants atomically rotate one stable origin/name-scoped browser client, invalidate earlier tokens, and retain its jobs | re-pair history test |
 | Secret leak in normal logs | Requests are not body-logged; token values are never tracing fields; errors are bounded | source review and SDK error test |
 | Silent remote job | Loopback-only bind; remote server must act through an authorized browser on that machine or a local process | bind assertion and architecture |
 

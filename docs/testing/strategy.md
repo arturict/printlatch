@@ -32,6 +32,8 @@ The automated suite explicitly covers:
 - exact browser origin enforcement
 - one-time pairing replay
 - wrong-origin pairing without code consumption
+- spoofed local listener and agent-session-bound dashboard grants
+- dashboard re-pair token rotation with retained job history
 - DNS rebinding host
 - WebSocket upgrade
 - SSRF-shaped unknown field
@@ -41,6 +43,8 @@ The automated suite explicitly covers:
 - oversized job
 - printer-name command characters
 - client-to-client job isolation
+- authenticated access to the bundled test PDF
+- independent polling selection for multiple active jobs
 - atomic queue claim and concurrent cancel race
 - restart during print submission
 - explicit retry cap

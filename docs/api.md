@@ -19,10 +19,19 @@ accepted only when the stored dashboard origin exactly equals
 `Sec-Fetch-Site: same-origin`. Cross-origin browser requests still require the
 exact paired `Origin`.
 
+The static dashboard shell is public, but `GET /app/test-page.pdf` is not. The
+built-in PDF requires the same authenticated, origin-bound dashboard token as
+preview and document retrieval.
+
 ## `GET /health`
 
 Unauthenticated liveness only. It returns product, version, loopback bind policy,
 and telemetry status. It exposes no printer, client, document, or queue data.
+
+`GET /health/instance?challenge=<32 hex characters>` is reserved for the local
+CLI. It returns the current random agent-session identifier plus an HMAC proof
+derived from installation-local state. `printlatch dashboard` verifies that
+proof before creating a grant and binds the grant to that agent session.
 
 ## `POST /v1/pair`
 

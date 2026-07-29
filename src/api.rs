@@ -37,6 +37,7 @@ pub struct AppState {
     pub config: AppConfig,
     pub db: Database,
     pub queue: QueueSignal,
+    pub instance_session: String,
 }
 
 #[derive(Serialize)]
@@ -46,6 +47,19 @@ struct Health {
     version: &'static str,
     bind: &'static str,
     telemetry: bool,
+}
+
+#[derive(Deserialize)]
+struct InstanceChallenge {
+    challenge: String,
+}
+
+#[derive(Serialize)]
+struct InstanceIdentity {
+    product: &'static str,
+    version: &'static str,
+    session: String,
+    proof: String,
 }
 
 #[derive(Deserialize)]
@@ -89,8 +103,10 @@ pub fn router(state: AppState) -> Router {
         .route("/app/app.js", get(operator_script))
         .route("/app/model.js", get(operator_model))
         .route("/app/styles.css", get(operator_styles))
+        .route("/app/icon.svg", get(operator_icon))
         .route("/app/test-page.pdf", get(operator_test_pdf))
         .route("/health", get(health))
+        .route("/health/instance", get(instance_identity))
         .route("/v1/pair", post(pair))
         .route("/v1/printers", get(list_printers))
         .route("/v1/jobs", post(create_job).get(list_jobs))
@@ -135,11 +151,24 @@ async fn operator_styles() -> Response {
     )
 }
 
-async fn operator_test_pdf() -> Response {
-    static_asset(
+async fn operator_icon() -> Response {
+    static_asset("image/svg+xml", include_bytes!("../ui/icon.svg"))
+}
+
+async fn operator_test_pdf(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Response, AppError> {
+    auth::authenticate(&state.db, &headers)?;
+    let mut response = static_asset(
         "application/pdf",
         include_bytes!("../docs/assets/sample.pdf"),
-    )
+    );
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("no-store, private"),
+    );
+    Ok(response)
 }
 
 fn static_asset(content_type: &'static str, bytes: &'static [u8]) -> Response {
@@ -160,13 +189,33 @@ async fn health() -> Json<Health> {
     })
 }
 
+async fn instance_identity(
+    State(state): State<AppState>,
+    Query(query): Query<InstanceChallenge>,
+) -> Result<Json<InstanceIdentity>, AppError> {
+    if !auth::valid_instance_challenge(&query.challenge) {
+        return Err(AppError::BadRequest(
+            "instance challenge must be 32 hexadecimal characters".to_owned(),
+        ));
+    }
+    let proof = auth::instance_proof(&state.db, &query.challenge, &state.instance_session)
+        .map_err(AppError::internal)?;
+    Ok(Json(InstanceIdentity {
+        product: crate::PRODUCT_NAME,
+        version: VERSION,
+        session: state.instance_session,
+        proof,
+    }))
+}
+
 async fn pair(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(request): Json<PairRequest>,
 ) -> Result<Json<IssuedToken>, AppError> {
     let origin = request_origin(&headers)?;
-    let token = auth::consume_pairing_code(&state.db, &request.code, origin)?;
+    let token =
+        auth::consume_pairing_code(&state.db, &request.code, origin, &state.instance_session)?;
     Ok(Json(token))
 }
 
@@ -597,7 +646,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn operator_assets_have_expected_types() {
+    async fn public_operator_assets_have_expected_types() {
         assert_eq!(
             operator_index()
                 .await
@@ -607,12 +656,12 @@ mod tests {
             "text/html; charset=utf-8"
         );
         assert_eq!(
-            operator_test_pdf()
+            operator_icon()
                 .await
                 .headers()
                 .get(header::CONTENT_TYPE)
                 .expect("content type"),
-            "application/pdf"
+            "image/svg+xml"
         );
     }
 }
