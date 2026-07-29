@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use chrono::Utc;
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
 
 use crate::auth::{AuthenticatedClient, ClientKind};
@@ -16,6 +16,7 @@ pub struct Database {
 pub struct PairingRecord {
     pub origin: String,
     pub name: String,
+    pub reuse_client: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -77,6 +78,7 @@ impl Database {
                 name TEXT NOT NULL,
                 kind TEXT NOT NULL CHECK (kind IN ('browser', 'local')),
                 origin TEXT,
+                stable_key TEXT,
                 token_hash TEXT NOT NULL UNIQUE,
                 expires_at INTEGER NOT NULL,
                 created_at INTEGER NOT NULL,
@@ -87,7 +89,13 @@ impl Database {
                 origin TEXT NOT NULL,
                 name TEXT NOT NULL,
                 expires_at INTEGER NOT NULL,
-                consumed_at INTEGER
+                consumed_at INTEGER,
+                instance_session TEXT,
+                reuse_client INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS instance_identity (
+                slot INTEGER PRIMARY KEY CHECK (slot = 1),
+                secret TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS jobs (
                 id TEXT PRIMARY KEY,
@@ -111,6 +119,52 @@ impl Database {
                 ON jobs(state, created_at);
             ",
         )?;
+        let clients_have_stable_key: bool = connection.query_row(
+            "SELECT EXISTS(
+                SELECT 1 FROM pragma_table_info('clients')
+                WHERE name = 'stable_key'
+            )",
+            [],
+            |row| row.get(0),
+        )?;
+        if !clients_have_stable_key {
+            connection.execute("ALTER TABLE clients ADD COLUMN stable_key TEXT", [])?;
+        }
+        connection.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS clients_active_stable_key
+             ON clients(stable_key)
+             WHERE stable_key IS NOT NULL AND revoked_at IS NULL",
+            [],
+        )?;
+        let pairing_has_session: bool = connection.query_row(
+            "SELECT EXISTS(
+                SELECT 1 FROM pragma_table_info('pairing_codes')
+                WHERE name = 'instance_session'
+            )",
+            [],
+            |row| row.get(0),
+        )?;
+        if !pairing_has_session {
+            connection.execute(
+                "ALTER TABLE pairing_codes ADD COLUMN instance_session TEXT",
+                [],
+            )?;
+        }
+        let pairing_has_reuse_client: bool = connection.query_row(
+            "SELECT EXISTS(
+                SELECT 1 FROM pragma_table_info('pairing_codes')
+                WHERE name = 'reuse_client'
+            )",
+            [],
+            |row| row.get(0),
+        )?;
+        if !pairing_has_reuse_client {
+            connection.execute(
+                "ALTER TABLE pairing_codes
+                 ADD COLUMN reuse_client INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
         Ok(())
     }
 
@@ -132,6 +186,8 @@ impl Database {
         origin: &str,
         name: &str,
         expires_at: i64,
+        instance_session: Option<&str>,
+        reuse_client: bool,
     ) -> Result<()> {
         let now = Utc::now().timestamp();
         let mut connection = self.connect()?;
@@ -141,9 +197,17 @@ impl Database {
             [now],
         )?;
         transaction.execute(
-            "INSERT INTO pairing_codes (code_hash, origin, name, expires_at)
-             VALUES (?1, ?2, ?3, ?4)",
-            params![code_hash, origin, name, expires_at],
+            "INSERT INTO pairing_codes
+             (code_hash, origin, name, expires_at, instance_session, reuse_client)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                code_hash,
+                origin,
+                name,
+                expires_at,
+                instance_session,
+                reuse_client
+            ],
         )?;
         transaction.commit()?;
         Ok(())
@@ -154,19 +218,22 @@ impl Database {
         code_hash: &str,
         origin: &str,
         now: i64,
+        instance_session: &str,
     ) -> Result<Option<PairingRecord>> {
         let mut connection = self.connect()?;
         let transaction = connection.transaction()?;
         let record = transaction
             .query_row(
-                "SELECT origin, name FROM pairing_codes
+                "SELECT origin, name, reuse_client FROM pairing_codes
                  WHERE code_hash = ?1 AND origin = ?2 AND expires_at >= ?3
-                   AND consumed_at IS NULL",
-                params![code_hash, origin, now],
+                   AND consumed_at IS NULL
+                   AND (instance_session IS NULL OR instance_session = ?4)",
+                params![code_hash, origin, now, instance_session],
                 |row| {
                     Ok(PairingRecord {
                         origin: row.get(0)?,
                         name: row.get(1)?,
+                        reuse_client: row.get(2)?,
                     })
                 },
             )
@@ -180,6 +247,22 @@ impl Database {
         }
         transaction.commit()?;
         Ok(record)
+    }
+
+    pub fn get_or_create_instance_secret(&self, candidate: &str) -> Result<String> {
+        let mut connection = self.connect()?;
+        let transaction = connection.transaction()?;
+        transaction.execute(
+            "INSERT OR IGNORE INTO instance_identity (slot, secret) VALUES (1, ?1)",
+            [candidate],
+        )?;
+        let secret = transaction.query_row(
+            "SELECT secret FROM instance_identity WHERE slot = 1",
+            [],
+            |row| row.get(0),
+        )?;
+        transaction.commit()?;
+        Ok(secret)
     }
 
     pub fn insert_client(
@@ -206,6 +289,61 @@ impl Database {
             ],
         )?;
         Ok(())
+    }
+
+    pub fn rotate_or_insert_stable_browser_client(
+        &self,
+        new_id: &str,
+        stable_key: &str,
+        name: &str,
+        origin: &str,
+        token_hash: &str,
+        expires_at: i64,
+    ) -> Result<String> {
+        let now = Utc::now().timestamp();
+        let mut connection = self.connect()?;
+        let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let existing_id = transaction
+            .query_row(
+                "SELECT id FROM clients
+                 WHERE kind = 'browser' AND stable_key = ?1 AND revoked_at IS NULL
+                 ORDER BY created_at DESC LIMIT 1",
+                [stable_key],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        let client_id = if let Some(existing_id) = existing_id {
+            let changed = transaction.execute(
+                "UPDATE clients
+                 SET name = ?1, origin = ?2, token_hash = ?3, expires_at = ?4
+                 WHERE id = ?5 AND stable_key = ?6 AND revoked_at IS NULL",
+                params![
+                    name,
+                    origin,
+                    token_hash,
+                    expires_at,
+                    existing_id,
+                    stable_key
+                ],
+            )?;
+            anyhow::ensure!(
+                changed == 1,
+                "stable browser client changed during token rotation"
+            );
+            existing_id
+        } else {
+            transaction.execute(
+                "INSERT INTO clients
+                 (id, name, kind, origin, stable_key, token_hash, expires_at, created_at)
+                 VALUES (?1, ?2, 'browser', ?3, ?4, ?5, ?6, ?7)",
+                params![
+                    new_id, name, origin, stable_key, token_hash, expires_at, now
+                ],
+            )?;
+            new_id.to_owned()
+        };
+        transaction.commit()?;
+        Ok(client_id)
     }
 
     pub fn get_client(&self, id: &str) -> Result<Option<AuthenticatedClient>> {
@@ -346,7 +484,18 @@ impl Database {
         let mut statement = connection.prepare(
             "SELECT id, client_id, printer_id, state, mode, copies, page_count,
                     byte_count, sha256, attempts, detail, created_at, updated_at
-             FROM jobs WHERE client_id = ?1 ORDER BY created_at DESC LIMIT ?2",
+             FROM jobs
+             WHERE client_id = ?1
+               AND (
+                   state IN ('queued', 'printing')
+                   OR id IN (
+                       SELECT id FROM jobs
+                       WHERE client_id = ?1
+                       ORDER BY created_at DESC, id DESC
+                       LIMIT ?2
+                   )
+               )
+             ORDER BY created_at DESC, id DESC",
         )?;
         let rows = statement.query_map(params![client_id, limit], job_from_row)?;
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
@@ -449,4 +598,165 @@ fn job_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Job> {
         created_at: row.get(11)?,
         updated_at: row.get(12)?,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn migrates_existing_pairing_codes_to_explicit_non_reuse() {
+        let temp = tempfile::tempdir().expect("temporary directory");
+        let path = temp.path().join("migration.sqlite3");
+        let connection = Connection::open(&path).expect("legacy database");
+        connection
+            .execute_batch(
+                "
+                CREATE TABLE pairing_codes (
+                    code_hash TEXT PRIMARY KEY,
+                    origin TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    expires_at INTEGER NOT NULL,
+                    consumed_at INTEGER
+                );
+                INSERT INTO pairing_codes
+                    (code_hash, origin, name, expires_at, consumed_at)
+                VALUES ('legacy', 'https://app.example', 'Browser app', 1, NULL);
+                CREATE TABLE clients (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    kind TEXT NOT NULL CHECK (kind IN ('browser', 'local')),
+                    origin TEXT,
+                    token_hash TEXT NOT NULL UNIQUE,
+                    expires_at INTEGER NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    revoked_at INTEGER
+                );
+                INSERT INTO clients
+                    (id, name, kind, origin, token_hash, expires_at, created_at)
+                VALUES (
+                    'legacy-client',
+                    'PrintLatch dashboard',
+                    'browser',
+                    'http://127.0.0.1:32191',
+                    'legacy-token',
+                    1,
+                    1
+                );
+                ",
+            )
+            .expect("legacy pairing table");
+        drop(connection);
+
+        let db = Database::open(&path).expect("migrated database");
+        let connection = db.connect().expect("migrated connection");
+        let (session, reuse_client): (Option<String>, bool) = connection
+            .query_row(
+                "SELECT instance_session, reuse_client
+                 FROM pairing_codes WHERE code_hash = 'legacy'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("migrated pairing record");
+        assert!(session.is_none());
+        assert!(!reuse_client);
+        let stable_key: Option<String> = connection
+            .query_row(
+                "SELECT stable_key FROM clients WHERE id = 'legacy-client'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("migrated client record");
+        assert!(stable_key.is_none());
+    }
+
+    #[test]
+    fn job_history_limit_never_hides_older_active_jobs() {
+        let temp = tempfile::tempdir().expect("temporary directory");
+        let db = Database::open(temp.path().join("active-jobs.sqlite3")).expect("database");
+        db.insert_client(
+            "client",
+            "Dashboard",
+            ClientKind::Browser,
+            Some("http://127.0.0.1:32191"),
+            "client-token",
+            i64::MAX,
+        )
+        .expect("client");
+        let mut connection = db.connect().expect("connection");
+        let transaction = connection.transaction().expect("job transaction");
+        for index in 0..=101 {
+            let id = format!("job-{index:03}");
+            let state = if index == 0 {
+                "queued"
+            } else {
+                "preview_ready"
+            };
+            let mode = if index == 0 { "print" } else { "preview" };
+            transaction
+                .execute(
+                    "INSERT INTO jobs (
+                        id, client_id, printer_id, state, mode, copies, page_count,
+                        byte_count, sha256, file_path, created_at, updated_at
+                     ) VALUES (
+                        ?1, 'client', 'capture:pdf', ?2, ?3, 1, 1,
+                        1, 'hash', ?4, ?5, ?5
+                     )",
+                    params![id, state, mode, format!("{index}.pdf"), index],
+                )
+                .expect("job");
+        }
+        transaction.commit().expect("commit jobs");
+
+        let jobs = db
+            .list_jobs_for_client("client", 100)
+            .expect("limited jobs");
+        assert_eq!(jobs.len(), 101);
+        assert!(jobs.iter().any(|job| job.id == "job-000"));
+        assert!(!jobs.iter().any(|job| job.id == "job-001"));
+    }
+
+    #[test]
+    fn stable_browser_rotation_waits_for_the_current_writer() {
+        let temp = tempfile::tempdir().expect("temporary directory");
+        let db = Database::open(temp.path().join("rotation.sqlite3")).expect("database");
+        let stable_id = db
+            .rotate_or_insert_stable_browser_client(
+                "stable-client",
+                "operator-dashboard-v1",
+                "PrintLatch dashboard",
+                "http://127.0.0.1:32191",
+                "first-token",
+                i64::MAX,
+            )
+            .expect("initial stable client");
+
+        let mut locking_connection = db.connect().expect("locking connection");
+        let write_lock = locking_connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .expect("write lock");
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let thread_barrier = barrier.clone();
+        let thread_db = db.clone();
+        let rotation = std::thread::spawn(move || {
+            thread_barrier.wait();
+            thread_db.rotate_or_insert_stable_browser_client(
+                "unused-candidate",
+                "operator-dashboard-v1",
+                "PrintLatch dashboard",
+                "http://127.0.0.1:32191",
+                "second-token",
+                i64::MAX,
+            )
+        });
+        barrier.wait();
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        write_lock.commit().expect("release write lock");
+
+        let rotated_id = rotation
+            .join()
+            .expect("rotation thread")
+            .expect("serialized rotation");
+        assert_eq!(rotated_id, stable_id);
+    }
 }

@@ -35,6 +35,10 @@ jobs:
           if ($tag -ne "v$version") {
             throw "Tag $tag does not match Cargo version $version"
           }
+          $releaseNotes = "docs/releases/$tag.md"
+          if (-not (Test-Path -LiteralPath $releaseNotes -PathType Leaf)) {
+            throw "Missing release notes: $releaseNotes"
+          }
           $stage = "artifacts/printlatch-$tag-windows-x64"
           New-Item -ItemType Directory -Force "$stage/docs/assets", "$stage/examples", "$stage/packages/sdk/dist" | Out-Null
           Copy-Item target/release/printlatch.exe "$stage/printlatch.exe"
@@ -58,6 +62,7 @@ jobs:
           }
           $lines | Set-Content artifacts/SHA256SUMS.txt
           "STAGE=$stage" >> $env:GITHUB_ENV
+          "RELEASE_NOTES=$releaseNotes" >> $env:GITHUB_ENV
       - name: Smoke release archive
         shell: pwsh
         run: ./scripts/smoke-release.ps1 -ArchiveRoot $env:STAGE
@@ -68,10 +73,9 @@ jobs:
             artifacts/printlatch-${{ github.ref_name }}-windows-x64.zip
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
-          body_path: docs/releases/v0.1.0.md
+          body_path: ${{ env.RELEASE_NOTES }}
           fail_on_unmatched_files: true
           files: |
             artifacts/printlatch-${{ github.ref_name }}-windows-x64.exe
             artifacts/printlatch-${{ github.ref_name }}-windows-x64.zip
             artifacts/SHA256SUMS.txt
-

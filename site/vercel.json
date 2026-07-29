@@ -42,7 +42,7 @@
       ]
     },
     {
-      "source": "/(styles.css|app.js|favicon.svg|og.png|site.webmanifest)",
+      "source": "/(styles.css|app.js|favicon.svg|og.png|og-v2.png|site.webmanifest)",
       "headers": [
         {
           "key": "Cache-Control",

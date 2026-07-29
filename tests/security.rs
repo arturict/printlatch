@@ -17,6 +17,7 @@ use tower::ServiceExt;
 
 const HOST: &str = "127.0.0.1:32191";
 const BOUNDARY: &str = "printlatch-test-boundary";
+const AGENT_SESSION: &str = "test-session-value-000000000000000000000000";
 
 struct Harness {
     temp: TempDir,
@@ -37,6 +38,7 @@ impl Harness {
             config,
             db: db.clone(),
             queue: QueueSignal::new(),
+            instance_session: AGENT_SESSION.to_owned(),
         });
         Self {
             temp,
@@ -162,6 +164,320 @@ async fn local_tokens_cannot_be_replayed_from_a_browser_origin() {
 }
 
 #[tokio::test]
+async fn local_dashboard_get_requires_browser_proven_same_origin() {
+    let harness = Harness::new();
+    let origin = format!("http://{HOST}");
+    let grant = auth::new_pairing_grant(&harness.db, &origin, "dashboard").expect("pairing grant");
+    let pair_response = harness
+        .app
+        .clone()
+        .oneshot(json_request(
+            Method::POST,
+            "/v1/pair",
+            &serde_json::json!({ "code": grant.code }),
+            Some(&origin),
+        ))
+        .await
+        .expect("pair response");
+    let token = response_json(pair_response)
+        .await
+        .get("token")
+        .and_then(Value::as_str)
+        .expect("browser token")
+        .to_owned();
+
+    let accepted = Request::builder()
+        .method(Method::GET)
+        .uri("/v1/printers")
+        .header(header::HOST, HOST)
+        .header("sec-fetch-site", "same-origin")
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .body(Body::empty())
+        .expect("same-origin request");
+    assert_eq!(
+        harness
+            .app
+            .clone()
+            .oneshot(accepted)
+            .await
+            .expect("accepted response")
+            .status(),
+        StatusCode::OK
+    );
+
+    let missing_browser_proof = Request::builder()
+        .method(Method::GET)
+        .uri("/v1/printers")
+        .header(header::HOST, HOST)
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .body(Body::empty())
+        .expect("request without browser proof");
+    assert_eq!(
+        harness
+            .app
+            .oneshot(missing_browser_proof)
+            .await
+            .expect("rejected response")
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+}
+
+#[tokio::test]
+async fn bundled_test_pdf_requires_authentication() {
+    let harness = Harness::new();
+    let unauthenticated = Request::builder()
+        .method(Method::GET)
+        .uri("/app/test-page.pdf")
+        .header(header::HOST, HOST)
+        .body(Body::empty())
+        .expect("unauthenticated request");
+    assert_eq!(
+        harness
+            .app
+            .clone()
+            .oneshot(unauthenticated)
+            .await
+            .expect("response")
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+
+    let authenticated = harness.authenticated(Method::GET, "/app/test-page.pdf", Body::empty());
+    let response = harness
+        .app
+        .oneshot(authenticated)
+        .await
+        .expect("authenticated response");
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers().get(header::CONTENT_TYPE),
+        Some(&header::HeaderValue::from_static("application/pdf"))
+    );
+    assert_eq!(
+        response.headers().get(header::CACHE_CONTROL),
+        Some(&header::HeaderValue::from_static("no-store, private"))
+    );
+}
+
+#[tokio::test]
+async fn dashboard_repair_rotates_token_and_preserves_job_history() {
+    let harness = Harness::new();
+    let origin = format!("http://{HOST}");
+    let first = pair_dashboard(&harness, &origin).await;
+    let first_token = first["token"].as_str().expect("first token");
+    let first_client = first["client_id"].as_str().expect("first client");
+
+    let body = multipart_body(&[
+        text_part("mode", "preview"),
+        file_part("history.pdf", "application/pdf", &minimal_pdf()),
+    ]);
+    let mut create = Request::builder()
+        .method(Method::POST)
+        .uri("/v1/jobs")
+        .header(header::HOST, HOST)
+        .header(header::ORIGIN, &origin)
+        .header(header::AUTHORIZATION, format!("Bearer {first_token}"))
+        .body(Body::from(body))
+        .expect("create request");
+    create.headers_mut().insert(
+        header::CONTENT_TYPE,
+        format!("multipart/form-data; boundary={BOUNDARY}")
+            .parse()
+            .expect("multipart content type"),
+    );
+    assert_eq!(
+        harness
+            .app
+            .clone()
+            .oneshot(create)
+            .await
+            .expect("create response")
+            .status(),
+        StatusCode::ACCEPTED
+    );
+
+    let second = pair_dashboard(&harness, &origin).await;
+    let second_token = second["token"].as_str().expect("second token");
+    assert_eq!(
+        second["client_id"].as_str().expect("second client"),
+        first_client
+    );
+    assert_ne!(second_token, first_token);
+
+    let old_token = Request::builder()
+        .method(Method::GET)
+        .uri("/v1/jobs")
+        .header(header::HOST, HOST)
+        .header(header::ORIGIN, &origin)
+        .header(header::AUTHORIZATION, format!("Bearer {first_token}"))
+        .body(Body::empty())
+        .expect("old-token request");
+    assert_eq!(
+        harness
+            .app
+            .clone()
+            .oneshot(old_token)
+            .await
+            .expect("old-token response")
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+
+    let new_token = Request::builder()
+        .method(Method::GET)
+        .uri("/v1/jobs")
+        .header(header::HOST, HOST)
+        .header(header::ORIGIN, &origin)
+        .header(header::AUTHORIZATION, format!("Bearer {second_token}"))
+        .body(Body::empty())
+        .expect("new-token request");
+    let jobs = response_json(
+        harness
+            .app
+            .oneshot(new_token)
+            .await
+            .expect("new-token response"),
+    )
+    .await;
+    assert_eq!(jobs["jobs"].as_array().expect("jobs").len(), 1);
+}
+
+#[tokio::test]
+async fn generic_browser_grants_keep_clients_and_job_history_separate() {
+    let harness = Harness::new();
+    let origin = format!("http://{HOST}");
+    let first = pair_browser(&harness, &origin, "PrintLatch dashboard").await;
+    let first_token = first["token"].as_str().expect("first token");
+
+    let body = multipart_body(&[
+        text_part("mode", "preview"),
+        file_part("private-history.pdf", "application/pdf", &minimal_pdf()),
+    ]);
+    let mut create = Request::builder()
+        .method(Method::POST)
+        .uri("/v1/jobs")
+        .header(header::HOST, HOST)
+        .header(header::ORIGIN, &origin)
+        .header(header::AUTHORIZATION, format!("Bearer {first_token}"))
+        .body(Body::from(body))
+        .expect("create request");
+    create.headers_mut().insert(
+        header::CONTENT_TYPE,
+        format!("multipart/form-data; boundary={BOUNDARY}")
+            .parse()
+            .expect("multipart content type"),
+    );
+    assert_eq!(
+        harness
+            .app
+            .clone()
+            .oneshot(create)
+            .await
+            .expect("create response")
+            .status(),
+        StatusCode::ACCEPTED
+    );
+
+    let second = pair_browser(&harness, &origin, "PrintLatch dashboard").await;
+    assert_ne!(first["client_id"], second["client_id"]);
+
+    let second_jobs = Request::builder()
+        .method(Method::GET)
+        .uri("/v1/jobs")
+        .header(header::HOST, HOST)
+        .header(header::ORIGIN, &origin)
+        .header(
+            header::AUTHORIZATION,
+            format!("Bearer {}", second["token"].as_str().expect("second token")),
+        )
+        .body(Body::empty())
+        .expect("second-client request");
+    let jobs = response_json(
+        harness
+            .app
+            .clone()
+            .oneshot(second_jobs)
+            .await
+            .expect("second-client response"),
+    )
+    .await;
+    assert!(jobs["jobs"].as_array().expect("jobs").is_empty());
+
+    let dashboard = pair_dashboard(&harness, &origin).await;
+    assert_ne!(first["client_id"], dashboard["client_id"]);
+    assert_ne!(second["client_id"], dashboard["client_id"]);
+    let dashboard_jobs = Request::builder()
+        .method(Method::GET)
+        .uri("/v1/jobs")
+        .header(header::HOST, HOST)
+        .header(header::ORIGIN, &origin)
+        .header(
+            header::AUTHORIZATION,
+            format!(
+                "Bearer {}",
+                dashboard["token"].as_str().expect("dashboard token")
+            ),
+        )
+        .body(Body::empty())
+        .expect("dashboard request");
+    let jobs = response_json(
+        harness
+            .app
+            .clone()
+            .oneshot(dashboard_jobs)
+            .await
+            .expect("dashboard response"),
+    )
+    .await;
+    assert!(jobs["jobs"].as_array().expect("jobs").is_empty());
+
+    let first_still_valid = Request::builder()
+        .method(Method::GET)
+        .uri("/v1/jobs")
+        .header(header::HOST, HOST)
+        .header(header::ORIGIN, &origin)
+        .header(header::AUTHORIZATION, format!("Bearer {first_token}"))
+        .body(Body::empty())
+        .expect("first-client request");
+    assert_eq!(
+        harness
+            .app
+            .oneshot(first_still_valid)
+            .await
+            .expect("first-client response")
+            .status(),
+        StatusCode::OK
+    );
+}
+
+#[tokio::test]
+async fn dashboard_grant_is_bound_to_the_running_agent_session() {
+    let harness = Harness::new();
+    let origin = format!("http://{HOST}");
+    let stale_session = "stale-session-value-00000000000000000000000";
+    assert!(auth::valid_agent_session(stale_session));
+    let grant = auth::new_dashboard_pairing_grant(
+        &harness.db,
+        &origin,
+        "PrintLatch dashboard",
+        stale_session,
+    )
+    .expect("session-bound grant");
+    let response = harness
+        .app
+        .oneshot(json_request(
+            Method::POST,
+            "/v1/pair",
+            &serde_json::json!({ "code": grant.code }),
+            Some(&origin),
+        ))
+        .await
+        .expect("pair response");
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
 async fn rejects_dns_rebinding_and_websocket_upgrade() {
     let harness = Harness::new();
     let rebound = Request::builder()
@@ -196,6 +512,92 @@ async fn rejects_dns_rebinding_and_websocket_upgrade() {
             .expect("response")
             .status(),
         StatusCode::BAD_REQUEST
+    );
+}
+
+#[tokio::test]
+async fn exposes_cors_and_private_network_headers_only_for_api_routes() {
+    let harness = Harness::new();
+    let origin = "https://attacker.example";
+    let shell = Request::builder()
+        .method(Method::GET)
+        .uri("/app")
+        .header(header::HOST, HOST)
+        .header(header::ORIGIN, origin)
+        .body(Body::empty())
+        .expect("cross-origin shell request");
+    let shell_response = harness
+        .app
+        .clone()
+        .oneshot(shell)
+        .await
+        .expect("shell response");
+    assert_eq!(shell_response.status(), StatusCode::OK);
+    assert!(
+        shell_response
+            .headers()
+            .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+            .is_none()
+    );
+
+    let shell_preflight = Request::builder()
+        .method(Method::OPTIONS)
+        .uri("/app")
+        .header(header::HOST, HOST)
+        .header(header::ORIGIN, origin)
+        .header("access-control-request-private-network", "true")
+        .body(Body::empty())
+        .expect("shell preflight");
+    let shell_preflight_response = harness
+        .app
+        .clone()
+        .oneshot(shell_preflight)
+        .await
+        .expect("shell preflight response");
+    assert_eq!(
+        shell_preflight_response.status(),
+        StatusCode::METHOD_NOT_ALLOWED
+    );
+    assert!(
+        shell_preflight_response
+            .headers()
+            .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+            .is_none()
+    );
+    assert!(
+        shell_preflight_response
+            .headers()
+            .get("access-control-allow-private-network")
+            .is_none()
+    );
+
+    let api_preflight = Request::builder()
+        .method(Method::OPTIONS)
+        .uri("/v1/pair")
+        .header(header::HOST, HOST)
+        .header(header::ORIGIN, origin)
+        .header("access-control-request-private-network", "true")
+        .body(Body::empty())
+        .expect("API preflight");
+    let api_preflight_response = harness
+        .app
+        .oneshot(api_preflight)
+        .await
+        .expect("API preflight response");
+    assert_eq!(api_preflight_response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(
+        api_preflight_response
+            .headers()
+            .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+            .expect("API CORS origin"),
+        origin
+    );
+    assert_eq!(
+        api_preflight_response
+            .headers()
+            .get("access-control-allow-private-network")
+            .expect("API private-network permission"),
+        "true"
     );
 }
 
@@ -341,6 +743,46 @@ fn json_request(method: Method, uri: &str, value: &Value, origin: Option<&str>) 
     builder
         .body(Body::from(value.to_string()))
         .expect("JSON request")
+}
+
+async fn pair_browser(harness: &Harness, origin: &str, name: &str) -> Value {
+    let grant = auth::new_pairing_grant(&harness.db, origin, name).expect("pairing grant");
+    let response = harness
+        .app
+        .clone()
+        .oneshot(json_request(
+            Method::POST,
+            "/v1/pair",
+            &serde_json::json!({ "code": grant.code }),
+            Some(origin),
+        ))
+        .await
+        .expect("pair response");
+    assert_eq!(response.status(), StatusCode::OK);
+    response_json(response).await
+}
+
+async fn pair_dashboard(harness: &Harness, origin: &str) -> Value {
+    let grant = auth::new_dashboard_pairing_grant(
+        &harness.db,
+        origin,
+        "PrintLatch dashboard",
+        AGENT_SESSION,
+    )
+    .expect("dashboard pairing grant");
+    let response = harness
+        .app
+        .clone()
+        .oneshot(json_request(
+            Method::POST,
+            "/v1/pair",
+            &serde_json::json!({ "code": grant.code }),
+            Some(origin),
+        ))
+        .await
+        .expect("dashboard pair response");
+    assert_eq!(response.status(), StatusCode::OK);
+    response_json(response).await
 }
 
 fn multipart_request(harness: &Harness, body: Vec<u8>) -> Request<Body> {

@@ -7,7 +7,7 @@ web app or local Node.js process submit PDF print jobs to printers already
 installed in Windows. Documents stay on the machine. There is no PrintLatch
 cloud, account, certificate subscription, or telemetry.
 
-> Release status: `0.1.0` is Windows 11 x64 only. PDF capture is fully testable
+> Release status: `0.1.1` is Windows 11 x64 only. PDF capture is fully testable
 > without a printer. Windows printer discovery and submission use the native
 > print pipeline. No label, receipt, raw ESC/POS, ZPL, macOS, or Linux support is
 > claimed in this release.
@@ -39,6 +39,7 @@ The research and deliberate exclusions are documented in
 
 ```mermaid
 flowchart LR
+    O["Local operator dashboard<br/>one-time CLI grant"] -->|"Origin-bound browser token"| B
     A["Paired HTTPS web app"] -->|"Origin-bound token + PDF"| B["PrintLatch API<br/>127.0.0.1 only"]
     N["Local Node.js process"] -->|"Local token + PDF"| B
     B --> V["PDF guard<br/>size, MIME, pages, active content"]
@@ -54,12 +55,12 @@ commands or process arguments.
 
 ## Install
 
-1. Download `printlatch-v0.1.0-windows-x64.zip` and `SHA256SUMS.txt` from the
+1. Download `printlatch-v0.1.1-windows-x64.zip` and `SHA256SUMS.txt` from the
    [GitHub release](https://github.com/arturict/printlatch/releases/latest).
 2. Verify the archive hash:
 
    ```powershell
-   Get-FileHash .\printlatch-v0.1.0-windows-x64.zip -Algorithm SHA256
+   Get-FileHash .\printlatch-v0.1.1-windows-x64.zip -Algorithm SHA256
    ```
 
 3. Extract the archive and run:
@@ -71,10 +72,37 @@ commands or process arguments.
 
 The installer places the unsigned executable under
 `%LOCALAPPDATA%\PrintLatch\bin`, registers a per-user startup task, starts the
-agent hidden, and verifies `http://127.0.0.1:32191/health`.
+agent hidden, verifies `http://127.0.0.1:32191/health`, and opens the local
+operator dashboard with a five-minute one-time grant. Use `-NoDashboard` for
+unattended installation.
 
 The binary is not code-signed in v0.1. Windows may show a SmartScreen warning.
 Verify the published checksum and release provenance before continuing.
+
+## First local result
+
+If the dashboard is not already open, run:
+
+```powershell
+printlatch dashboard
+```
+
+The command verifies the running agent against this local installation, creates
+a one-time grant bound to that agent session and the exact loopback dashboard
+origin, and opens the URL in the default browser. The token remains in browser
+session storage. A fresh dashboard grant rotates the same operator credential,
+invalidates its previous token, and retains its queue history.
+
+The first-run path deliberately avoids physical output:
+
+1. confirm the agent session and detected targets
+2. validate and inspect the built-in static one-page PDF
+3. explicitly confirm a job to `PrintLatch PDF Capture`
+4. wait for the queue to report success and verify the local artifact
+
+Windows printers are labeled `discovered`, not verified. A physical test page
+becomes optional only after the capture path succeeds. PrintLatch reports
+Windows submission state, not proof that paper emerged.
 
 ## Pair a web origin
 
@@ -96,6 +124,8 @@ Agent data: [local path redacted]
 
 Paste the code into the named web application. The agent returns a browser token
 only when the request's `Origin` exactly matches the origin bound to the code.
+Each application grant creates an independent client and job history, even when
+its name and origin match an earlier grant.
 The code is consumed once.
 
 ## Use from Node.js
@@ -163,9 +193,17 @@ that PrintLatch produced physical paper on that device.
 
 - Binds only to `127.0.0.1`, with strict `Host` validation against DNS rebinding.
 - No unauthenticated print, document, printer-list, cancel, or retry endpoint.
-- Browser tokens require the exact paired `Origin`; local tokens reject all
-  requests carrying an `Origin`.
+- Browser tokens require the exact paired `Origin`. The loopback dashboard also
+  accepts browser-proven same-origin GETs only when its stored origin exactly
+  matches the current loopback Host. Local tokens reject all requests carrying
+  an `Origin`.
 - Pairing codes are 128-bit, origin-bound, five-minute, and one-time.
+- Dashboard grants also require an HMAC-proven local installation and are bound
+  to the current agent session, so a listener on the configured port cannot
+  capture a grant for a later agent restart.
+- CORS and Private Network Access headers are emitted only for `/v1/*` API
+  routes. The operator shell and its local recovery command are never readable
+  cross-origin.
 - Tokens are stored as SHA-256 digests, expire, rotate, and revoke.
 - Unknown multipart fields are rejected, so PrintLatch cannot be used as an SSRF
   fetcher.

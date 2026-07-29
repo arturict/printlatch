@@ -20,6 +20,9 @@ backend.
 - `pnpm test`
 - `pnpm build`
 
+The root Vitest suite covers operator status labels, conservative printer-error
+classification, interrupted-submission warnings, and retry eligibility.
+
 ## Abuse cases
 
 The automated suite explicitly covers:
@@ -29,6 +32,11 @@ The automated suite explicitly covers:
 - exact browser origin enforcement
 - one-time pairing replay
 - wrong-origin pairing without code consumption
+- spoofed local listener and agent-session-bound dashboard grants
+- dashboard re-pair token rotation with retained job history
+- dedicated dashboard identity isolated from application pairings with matching names and origins
+- serialized stable-dashboard rotation under a competing SQLite writer
+- CORS and private-network headers restricted to authenticated API routes, never the operator shell
 - DNS rebinding host
 - WebSocket upgrade
 - SSRF-shaped unknown field
@@ -38,6 +46,11 @@ The automated suite explicitly covers:
 - oversized job
 - printer-name command characters
 - client-to-client job isolation
+- authenticated access to the bundled test PDF
+- independent polling selection for multiple active jobs
+- bounded polling recovery after transient status-request failures
+- active jobs retained outside the 100-job recent-history window
+- fragment pairing resumed after a transient agent-health failure
 - atomic queue claim and concurrent cancel race
 - restart during print submission
 - explicit retry cap
@@ -58,3 +71,19 @@ smoke sequence checks:
 8. agent restart recovery
 9. uninstall while preserving data
 10. purge uninstall in the isolated test directory
+
+## Operator browser smoke
+
+The embedded dashboard is exercised against a real temporary agent and SQLite
+queue:
+
+1. create and consume a loopback dashboard grant
+2. verify capture target detection and the no-Windows-printer empty state
+3. validate and retrieve the built-in PDF preview
+4. confirm a separate PDF capture job
+5. observe queued, printing, and terminal updates through the authenticated API
+6. compare the capture SHA-256 with the source PDF
+7. check desktop and 375 px responsive layouts for horizontal overflow
+8. check browser console errors and accessible live status messages
+
+No physical printer is invoked by this smoke.
