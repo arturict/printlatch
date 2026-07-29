@@ -11,10 +11,10 @@ jobs:
   analyze:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-      - uses: github/codeql-action/init@adfda868f108ac4222129de456ea554034a27db7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: github/codeql-action/init@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81
         with:
           languages: javascript-typescript
-      - uses: github/codeql-action/analyze@adfda868f108ac4222129de456ea554034a27db7
+      - uses: github/codeql-action/analyze@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81
         with:
           category: /language:javascript-typescript
