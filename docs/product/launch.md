@@ -10,7 +10,8 @@ Checked on 2026-07-29 against each community's current Reddit rules page.
 | [r/programming](https://old.reddit.com/r/programming/about/rules) | LLM-written content and project-promotion posts are prohibited. A technical write-up must be the actual focus. | Excluded. |
 | [r/sysadmin](https://old.reddit.com/r/sysadmin/about/rules) | Direct product advertising and GPT/LLM-created content are prohibited. | Excluded. |
 | [r/rust](https://old.reddit.com/r/rust/about/rules) | Rust projects are on-topic, but low-effort and apparently AI-generated submissions may be removed. | Excluded for this assisted launch. |
-| [r/SideProject](https://old.reddit.com/r/SideProject/about/rules) | No additional community rules were listed beyond Reddit-wide rules when checked. The community is specifically for sharing side projects. | Preferred launch community, subject to final content and user approval. |
+| [r/foss](https://old.reddit.com/r/foss/about/rules) | The listed promotion rule requires promoted projects to be free and open-source software. Current project introductions are normal community content. | Preferred launch community because PrintLatch is Apache-2.0 FOSS. |
+| [r/SideProject](https://old.reddit.com/r/SideProject/about/rules) | No additional community rules were listed beyond Reddit-wide rules when checked. The community is specifically for sharing side projects. | Allowed, but not selected because a focused FOSS audience is more relevant. |
 
 The final submission must:
 
