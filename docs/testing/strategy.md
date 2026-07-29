@@ -9,8 +9,8 @@
 - `cargo audit`
 
 Linux/container tests cover platform-neutral authorization, API, PDF guard,
-storage, and queue behavior. Windows CI also compiles and runs the Windows
-backend.
+storage, and queue behavior. The Windows gate compiles and runs the Windows
+backend on a Windows 11 x64 worker.
 
 ## TypeScript gates
 
@@ -67,10 +67,8 @@ smoke sequence checks:
 4. preview job and authenticated document download
 5. PDF capture print and output hash
 6. invalid MIME failure
-7. queued cancel behavior
-8. agent restart recovery
-9. uninstall while preserving data
-10. purge uninstall in the isolated test directory
+7. uninstall while preserving data
+8. purge uninstall in the isolated test directory
 
 ## Operator browser smoke
 
@@ -87,3 +85,10 @@ queue:
 8. check browser console errors and accessible live status messages
 
 No physical printer is invoked by this smoke.
+
+## Local and self-hosted execution
+
+GitHub workflows are manual-only during the July 2026 cost-control window.
+Use the pinned local and self-hosted commands in
+[local CI](local-ci.md) before pushing. Re-enable automatic GitHub triggers only
+after the cost window and an explicit repository decision.
