@@ -17,6 +17,18 @@ pnpm build
 pnpm audit --audit-level high
 ```
 
+## Secret scanning
+
+Run Gitleaks against the full local Git history:
+
+```powershell
+$repoPath = (Get-Location).Path
+docker run --rm `
+  --mount "type=bind,source=$repoPath,target=/repo" `
+  ghcr.io/gitleaks/gitleaks:v8.30.1 `
+  detect --source=/repo --redact --verbose
+```
+
 ## Rust on a pinned Linux container
 
 This path isolates build output from the checkout and uses Rust 1.94.1:
