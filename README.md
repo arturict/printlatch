@@ -77,7 +77,8 @@ operator dashboard with a five-minute one-time grant. Use `-NoDashboard` for
 unattended installation.
 
 The binary is not code-signed in v0.1. Windows may show a SmartScreen warning.
-Verify the published checksum and release provenance before continuing.
+Verify the published SHA-256 checksum before continuing. No build-provenance
+attestation is claimed for v0.1.1.
 
 ## First local result
 
@@ -264,9 +265,9 @@ docker run --rm `
   cargo test --all-targets
 ```
 
-The complete local and CI gates are listed in
-[testing](docs/testing/strategy.md). Contributions are welcome within the
-documented product boundary.
+The complete gates are listed in [testing](docs/testing/strategy.md), with
+[local and self-hosted reproduction commands](docs/testing/local-ci.md).
+Contributions are welcome within the documented product boundary.
 
 ## License
 

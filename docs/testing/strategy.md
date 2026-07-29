@@ -9,8 +9,8 @@
 - `cargo audit`
 
 Linux/container tests cover platform-neutral authorization, API, PDF guard,
-storage, and queue behavior. Windows CI also compiles and runs the Windows
-backend.
+storage, and queue behavior. The Windows gate compiles and runs the Windows
+backend on a Windows 11 x64 worker.
 
 ## TypeScript gates
 
@@ -87,3 +87,10 @@ queue:
 8. check browser console errors and accessible live status messages
 
 No physical printer is invoked by this smoke.
+
+## Local and self-hosted execution
+
+GitHub workflows are manual-only during the July 2026 cost-control window.
+Use the pinned local and self-hosted commands in
+[local CI](local-ci.md) before pushing. Re-enable automatic GitHub triggers only
+after the cost window and an explicit repository decision.
