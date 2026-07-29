@@ -86,7 +86,8 @@ Returns `202` and the created job.
 ## `GET /v1/jobs?limit=25`
 
 Lists only jobs belonging to the authenticated client. Limit is clamped to 1
-through 100.
+through 100 for recent history. Every `queued` or `printing` job is also
+returned, even when it is older than that history window.
 
 ## `GET /v1/jobs/:id`
 

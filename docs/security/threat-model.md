@@ -39,6 +39,7 @@ Version: 0.1.1
 | Cross-site request or token replay | No cookies; browser token requires exact paired `Origin`; local tokens reject every request with `Origin` | browser-origin tests |
 | Cross-origin operator-shell read | CORS and Private Network Access response headers are emitted only on `/v1/*`; `/app` and its assets never grant cross-origin read access | shell and API preflight test |
 | Pairing-code replay | 128-bit code, five-minute expiry, exact origin in the database transaction, one-time consumption | pairing replay test |
+| Concurrent dashboard grant redemption | Stable credential rotation starts with an immediate SQLite write transaction, so competing rotations wait and observe the latest client state | writer-contention test |
 | Local port impersonation | CLI verifies an HMAC challenge from installation-local state; dashboard grants are bound to the proven random agent session | real-agent and spoofed-listener tests |
 | DNS rebinding | Fixed `127.0.0.1` bind and exact `Host` allow-list | rebinding test |
 | WebSocket origin bypass | No WebSocket route; all upgrade attempts rejected | upgrade test |
@@ -49,6 +50,7 @@ Version: 0.1.1
 | PDF bomb or active content | page, object, decoded stream, and image-pixel caps; active actions, forms, embedded files, and encryption rejected | PDF guard tests |
 | Command or argument injection | No shell or external print command; printer IDs are hashes resolved against current Windows enumeration | printer-ID test and source review |
 | Queue double claim | Atomic SQLite `UPDATE ... RETURNING` state transition | concurrent claim/cancel test |
+| Active job hidden by history cap | Job listings always include every queued or printing job in addition to the bounded recent-history window | active-history test |
 | Restart duplicate | `printing` becomes `unknown`; no automatic replay | restart test |
 | Cross-client document access | Every job lookup is scoped by authenticated client ID | isolation test |
 | Dashboard re-pair history loss | Fresh grants atomically rotate the client selected by a dedicated internal dashboard marker, invalidate earlier tokens, and retain its jobs | re-pair history test |

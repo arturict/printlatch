@@ -35,6 +35,7 @@ The automated suite explicitly covers:
 - spoofed local listener and agent-session-bound dashboard grants
 - dashboard re-pair token rotation with retained job history
 - dedicated dashboard identity isolated from application pairings with matching names and origins
+- serialized stable-dashboard rotation under a competing SQLite writer
 - CORS and private-network headers restricted to authenticated API routes, never the operator shell
 - DNS rebinding host
 - WebSocket upgrade
@@ -48,6 +49,8 @@ The automated suite explicitly covers:
 - authenticated access to the bundled test PDF
 - independent polling selection for multiple active jobs
 - bounded polling recovery after transient status-request failures
+- active jobs retained outside the 100-job recent-history window
+- fragment pairing resumed after a transient agent-health failure
 - atomic queue claim and concurrent cancel race
 - restart during print submission
 - explicit retry cap

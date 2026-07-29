@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use chrono::Utc;
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
 
 use crate::auth::{AuthenticatedClient, ClientKind};
@@ -302,7 +302,7 @@ impl Database {
     ) -> Result<String> {
         let now = Utc::now().timestamp();
         let mut connection = self.connect()?;
-        let transaction = connection.transaction()?;
+        let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let existing_id = transaction
             .query_row(
                 "SELECT id FROM clients
@@ -484,7 +484,18 @@ impl Database {
         let mut statement = connection.prepare(
             "SELECT id, client_id, printer_id, state, mode, copies, page_count,
                     byte_count, sha256, attempts, detail, created_at, updated_at
-             FROM jobs WHERE client_id = ?1 ORDER BY created_at DESC LIMIT ?2",
+             FROM jobs
+             WHERE client_id = ?1
+               AND (
+                   state IN ('queued', 'printing')
+                   OR id IN (
+                       SELECT id FROM jobs
+                       WHERE client_id = ?1
+                       ORDER BY created_at DESC, id DESC
+                       LIMIT ?2
+                   )
+               )
+             ORDER BY created_at DESC, id DESC",
         )?;
         let rows = statement.query_map(params![client_id, limit], job_from_row)?;
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
@@ -657,5 +668,95 @@ mod tests {
             )
             .expect("migrated client record");
         assert!(stable_key.is_none());
+    }
+
+    #[test]
+    fn job_history_limit_never_hides_older_active_jobs() {
+        let temp = tempfile::tempdir().expect("temporary directory");
+        let db = Database::open(temp.path().join("active-jobs.sqlite3")).expect("database");
+        db.insert_client(
+            "client",
+            "Dashboard",
+            ClientKind::Browser,
+            Some("http://127.0.0.1:32191"),
+            "client-token",
+            i64::MAX,
+        )
+        .expect("client");
+        let mut connection = db.connect().expect("connection");
+        let transaction = connection.transaction().expect("job transaction");
+        for index in 0..=101 {
+            let id = format!("job-{index:03}");
+            let state = if index == 0 {
+                "queued"
+            } else {
+                "preview_ready"
+            };
+            let mode = if index == 0 { "print" } else { "preview" };
+            transaction
+                .execute(
+                    "INSERT INTO jobs (
+                        id, client_id, printer_id, state, mode, copies, page_count,
+                        byte_count, sha256, file_path, created_at, updated_at
+                     ) VALUES (
+                        ?1, 'client', 'capture:pdf', ?2, ?3, 1, 1,
+                        1, 'hash', ?4, ?5, ?5
+                     )",
+                    params![id, state, mode, format!("{index}.pdf"), index],
+                )
+                .expect("job");
+        }
+        transaction.commit().expect("commit jobs");
+
+        let jobs = db
+            .list_jobs_for_client("client", 100)
+            .expect("limited jobs");
+        assert_eq!(jobs.len(), 101);
+        assert!(jobs.iter().any(|job| job.id == "job-000"));
+        assert!(!jobs.iter().any(|job| job.id == "job-001"));
+    }
+
+    #[test]
+    fn stable_browser_rotation_waits_for_the_current_writer() {
+        let temp = tempfile::tempdir().expect("temporary directory");
+        let db = Database::open(temp.path().join("rotation.sqlite3")).expect("database");
+        let stable_id = db
+            .rotate_or_insert_stable_browser_client(
+                "stable-client",
+                "operator-dashboard-v1",
+                "PrintLatch dashboard",
+                "http://127.0.0.1:32191",
+                "first-token",
+                i64::MAX,
+            )
+            .expect("initial stable client");
+
+        let mut locking_connection = db.connect().expect("locking connection");
+        let write_lock = locking_connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .expect("write lock");
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let thread_barrier = barrier.clone();
+        let thread_db = db.clone();
+        let rotation = std::thread::spawn(move || {
+            thread_barrier.wait();
+            thread_db.rotate_or_insert_stable_browser_client(
+                "unused-candidate",
+                "operator-dashboard-v1",
+                "PrintLatch dashboard",
+                "http://127.0.0.1:32191",
+                "second-token",
+                i64::MAX,
+            )
+        });
+        barrier.wait();
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        write_lock.commit().expect("release write lock");
+
+        let rotated_id = rotation
+            .join()
+            .expect("rotation thread")
+            .expect("serialized rotation");
+        assert_eq!(rotated_id, stable_id);
     }
 }

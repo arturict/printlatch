@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { activeJobIds, canRetry, formatState, jobDiagnosis, pollingRetryDelay } from "./model.js";
+import {
+  activeJobIds,
+  canRetry,
+  formatState,
+  jobDiagnosis,
+  pairingCodeFromHash,
+  pollingRetryDelay,
+} from "./model.js";
 
 describe("operator job states", () => {
   it("uses explicit human-readable labels for every queue state", () => {
@@ -52,5 +59,10 @@ describe("operator job states", () => {
     expect(pollingRetryDelay(3)).toBe(2800);
     expect(pollingRetryDelay(4)).toBe(5000);
     expect(pollingRetryDelay(20)).toBe(5000);
+  });
+
+  it("preserves a fragment pairing code for a later healthy retry", () => {
+    expect(pairingCodeFromHash("#code=PL-ABCD")).toBe("PL-ABCD");
+    expect(pairingCodeFromHash("#overview")).toBeNull();
   });
 });

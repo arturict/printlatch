@@ -3,6 +3,7 @@ import {
   canRetry,
   formatState,
   jobDiagnosis,
+  pairingCodeFromHash,
   pollingRetryDelay,
 } from "/app/model.js";
 
@@ -26,6 +27,7 @@ const appState = {
   connected: false,
   refreshing: false,
   pairingInProgress: false,
+  pendingPairingCode: null,
   pollingTimers: new Map(),
 };
 
@@ -168,12 +170,12 @@ async function checkHealth() {
 }
 
 function codeFromFragment() {
-  const fragment = new URLSearchParams(window.location.hash.slice(1));
-  const code = fragment.get("code");
+  const code = pairingCodeFromHash(window.location.hash);
   if (code) {
+    appState.pendingPairingCode = code;
     history.replaceState(null, "", "/app/");
   }
-  return code;
+  return appState.pendingPairingCode;
 }
 
 async function pair(code) {
@@ -192,6 +194,7 @@ async function pair(code) {
   );
   const issued = await response.json();
   appState.token = issued.token;
+  appState.pendingPairingCode = null;
   sessionStorage.setItem(SESSION_TOKEN_KEY, issued.token);
   return issued;
 }
@@ -205,7 +208,6 @@ async function pairFromFragment() {
   try {
     await pair(fragmentCode);
     toast("Secure local dashboard connected.", "success");
-    await refreshAll();
     return true;
   } catch (error) {
     showConnectionOverlay("pair");
@@ -243,6 +245,10 @@ async function refreshAll({ announceResult = false } = {}) {
   try {
     const healthy = await checkHealth();
     if (!healthy) {
+      return;
+    }
+    const hadPendingPairing = Boolean(codeFromFragment());
+    if (hadPendingPairing && !(await pairFromFragment())) {
       return;
     }
     if (!appState.token) {
@@ -880,7 +886,11 @@ function bindEvents() {
     if (VIEW_TITLES[view]) {
       navigate(view);
     } else if (view.startsWith("code=")) {
-      await pairFromFragment();
+      codeFromFragment();
+      await refreshAll();
+      if (appState.token && !appState.pendingPairingCode) {
+        navigate("overview");
+      }
     }
   });
   window.addEventListener("beforeunload", () => {
@@ -893,19 +903,8 @@ function bindEvents() {
 async function start() {
   bindEvents();
   const intendedView = window.location.hash.slice(1);
-  const healthy = await checkHealth();
-  if (!healthy) {
-    return;
-  }
-  if (await pairFromFragment()) {
-    navigate("overview");
-    return;
-  }
+  codeFromFragment();
   navigate(VIEW_TITLES[intendedView] ? intendedView : "overview");
-  if (!appState.token) {
-    showConnectionOverlay("pair");
-    return;
-  }
   await refreshAll();
 }
 

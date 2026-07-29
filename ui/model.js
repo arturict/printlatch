@@ -26,6 +26,10 @@ export function pollingRetryDelay(failures) {
   return Math.min(5000, 700 * 2 ** (attempt - 1));
 }
 
+export function pairingCodeFromHash(hash) {
+  return new URLSearchParams(hash.replace(/^#/, "")).get("code");
+}
+
 export function jobDiagnosis(job) {
   if (job.state === "unknown") {
     return {

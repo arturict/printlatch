@@ -28,9 +28,12 @@ All notable changes are documented here. This project uses semantic versioning.
   and origins match; a dedicated internal marker identifies the dashboard
 - every active dashboard job now keeps an independent polling loop
 - transient job-status requests retry automatically with a bounded backoff
+- active jobs remain visible outside the 100-job recent-history window
+- fragment pairing resumes when a transient health failure clears
 - the bundled test PDF now requires the paired dashboard token
 - CORS and Private Network Access headers are now restricted to `/v1/*`, so the
   operator shell never grants cross-origin read access
+- stable dashboard credential rotations serialize before reading client state
 - dashboard recovery commands include the running executable, active data
   directory, and port
 - the embedded Node example uses the SDK's exported `PrintLatchClient`
