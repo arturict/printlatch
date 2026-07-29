@@ -17,6 +17,7 @@ use crate::{db::Database, error::AppError};
 const TOKEN_PREFIX: &str = "pl_live_";
 const PAIRING_TTL: Duration = Duration::from_secs(5 * 60);
 const MAX_CLIENT_DAYS: i64 = 90;
+const DASHBOARD_STABLE_KEY: &str = "operator-dashboard-v1";
 type HmacSha256 = Hmac<Sha256>;
 
 #[derive(Clone, Debug, Serialize)]
@@ -216,8 +217,9 @@ fn issue_stable_browser_token(
     let token = new_token()?;
     let candidate_id = Uuid::new_v4().to_string();
     let expires_at = Utc::now().timestamp() + days * 86_400;
-    let client_id = db.rotate_or_insert_browser_client(
+    let client_id = db.rotate_or_insert_stable_browser_client(
         &candidate_id,
+        DASHBOARD_STABLE_KEY,
         name,
         origin,
         &hash_secret(&token),

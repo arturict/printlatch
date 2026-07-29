@@ -78,6 +78,7 @@ impl Database {
                 name TEXT NOT NULL,
                 kind TEXT NOT NULL CHECK (kind IN ('browser', 'local')),
                 origin TEXT,
+                stable_key TEXT,
                 token_hash TEXT NOT NULL UNIQUE,
                 expires_at INTEGER NOT NULL,
                 created_at INTEGER NOT NULL,
@@ -117,6 +118,23 @@ impl Database {
             CREATE INDEX IF NOT EXISTS jobs_queue
                 ON jobs(state, created_at);
             ",
+        )?;
+        let clients_have_stable_key: bool = connection.query_row(
+            "SELECT EXISTS(
+                SELECT 1 FROM pragma_table_info('clients')
+                WHERE name = 'stable_key'
+            )",
+            [],
+            |row| row.get(0),
+        )?;
+        if !clients_have_stable_key {
+            connection.execute("ALTER TABLE clients ADD COLUMN stable_key TEXT", [])?;
+        }
+        connection.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS clients_active_stable_key
+             ON clients(stable_key)
+             WHERE stable_key IS NOT NULL AND revoked_at IS NULL",
+            [],
         )?;
         let pairing_has_session: bool = connection.query_row(
             "SELECT EXISTS(
@@ -273,9 +291,10 @@ impl Database {
         Ok(())
     }
 
-    pub fn rotate_or_insert_browser_client(
+    pub fn rotate_or_insert_stable_browser_client(
         &self,
         new_id: &str,
+        stable_key: &str,
         name: &str,
         origin: &str,
         token_hash: &str,
@@ -287,42 +306,39 @@ impl Database {
         let existing_id = transaction
             .query_row(
                 "SELECT id FROM clients
-                 WHERE kind = 'browser' AND name = ?1 AND origin = ?2
-                   AND revoked_at IS NULL
+                 WHERE kind = 'browser' AND stable_key = ?1 AND revoked_at IS NULL
                  ORDER BY created_at DESC LIMIT 1",
-                params![name, origin],
+                [stable_key],
                 |row| row.get::<_, String>(0),
             )
             .optional()?;
         let client_id = if let Some(existing_id) = existing_id {
-            transaction.execute(
-                "UPDATE jobs SET client_id = ?1
-                 WHERE client_id IN (
-                    SELECT id FROM clients
-                    WHERE kind = 'browser' AND name = ?2 AND origin = ?3
-                      AND revoked_at IS NULL AND id <> ?1
-                 )",
-                params![existing_id, name, origin],
-            )?;
-            transaction.execute(
-                "UPDATE clients SET revoked_at = ?1
-                 WHERE kind = 'browser' AND name = ?2 AND origin = ?3
-                   AND revoked_at IS NULL AND id <> ?4",
-                params![now, name, origin, existing_id],
-            )?;
-            transaction.execute(
+            let changed = transaction.execute(
                 "UPDATE clients
-                 SET token_hash = ?1, expires_at = ?2
-                 WHERE id = ?3 AND revoked_at IS NULL",
-                params![token_hash, expires_at, existing_id],
+                 SET name = ?1, origin = ?2, token_hash = ?3, expires_at = ?4
+                 WHERE id = ?5 AND stable_key = ?6 AND revoked_at IS NULL",
+                params![
+                    name,
+                    origin,
+                    token_hash,
+                    expires_at,
+                    existing_id,
+                    stable_key
+                ],
             )?;
+            anyhow::ensure!(
+                changed == 1,
+                "stable browser client changed during token rotation"
+            );
             existing_id
         } else {
             transaction.execute(
                 "INSERT INTO clients
-                 (id, name, kind, origin, token_hash, expires_at, created_at)
-                 VALUES (?1, ?2, 'browser', ?3, ?4, ?5, ?6)",
-                params![new_id, name, origin, token_hash, expires_at, now],
+                 (id, name, kind, origin, stable_key, token_hash, expires_at, created_at)
+                 VALUES (?1, ?2, 'browser', ?3, ?4, ?5, ?6, ?7)",
+                params![
+                    new_id, name, origin, stable_key, token_hash, expires_at, now
+                ],
             )?;
             new_id.to_owned()
         };
@@ -595,6 +611,27 @@ mod tests {
                 INSERT INTO pairing_codes
                     (code_hash, origin, name, expires_at, consumed_at)
                 VALUES ('legacy', 'https://app.example', 'Browser app', 1, NULL);
+                CREATE TABLE clients (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    kind TEXT NOT NULL CHECK (kind IN ('browser', 'local')),
+                    origin TEXT,
+                    token_hash TEXT NOT NULL UNIQUE,
+                    expires_at INTEGER NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    revoked_at INTEGER
+                );
+                INSERT INTO clients
+                    (id, name, kind, origin, token_hash, expires_at, created_at)
+                VALUES (
+                    'legacy-client',
+                    'PrintLatch dashboard',
+                    'browser',
+                    'http://127.0.0.1:32191',
+                    'legacy-token',
+                    1,
+                    1
+                );
                 ",
             )
             .expect("legacy pairing table");
@@ -612,5 +649,13 @@ mod tests {
             .expect("migrated pairing record");
         assert!(session.is_none());
         assert!(!reuse_client);
+        let stable_key: Option<String> = connection
+            .query_row(
+                "SELECT stable_key FROM clients WHERE id = 'legacy-client'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("migrated client record");
+        assert!(stable_key.is_none());
     }
 }

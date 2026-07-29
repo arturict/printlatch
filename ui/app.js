@@ -1,4 +1,10 @@
-import { activeJobIds, canRetry, formatState, jobDiagnosis } from "/app/model.js";
+import {
+  activeJobIds,
+  canRetry,
+  formatState,
+  jobDiagnosis,
+  pollingRetryDelay,
+} from "/app/model.js";
 
 const SESSION_TOKEN_KEY = "printlatch.dashboard.token";
 const ACTIVE_JOB_KEY = "printlatch.dashboard.activeJob";
@@ -664,10 +670,15 @@ async function watchJob(id) {
   }
   appState.pollingTimers.set(id, null);
   let previousState = appState.jobs.find((job) => job.id === id)?.state;
+  let pollingFailures = 0;
   const poll = async () => {
     try {
       const response = await api(`/v1/jobs/${id}`);
       const body = await response.json();
+      if (pollingFailures > 0) {
+        toast("Job status connection restored.", "success");
+        pollingFailures = 0;
+      }
       const index = appState.jobs.findIndex((job) => job.id === id);
       if (index >= 0) {
         appState.jobs[index] = body.job;
@@ -701,8 +712,16 @@ async function watchJob(id) {
         watchActiveJobs();
       }
     } catch (error) {
-      appState.pollingTimers.delete(id);
-      toast(`Could not refresh job: ${error.message}`, "error");
+      if (!appState.token) {
+        appState.pollingTimers.delete(id);
+        return;
+      }
+      pollingFailures += 1;
+      if (pollingFailures === 1) {
+        toast(`Job status unavailable. Retrying: ${error.message}`, "error");
+        announce(`Job status temporarily unavailable. Retrying automatically.`);
+      }
+      appState.pollingTimers.set(id, window.setTimeout(poll, pollingRetryDelay(pollingFailures)));
     }
   };
   await poll();

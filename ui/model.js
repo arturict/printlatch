@@ -21,6 +21,11 @@ export function activeJobIds(jobs, rememberedId = null) {
     .map((job) => job.id);
 }
 
+export function pollingRetryDelay(failures) {
+  const attempt = Math.max(1, Math.floor(Number(failures) || 1));
+  return Math.min(5000, 700 * 2 ** (attempt - 1));
+}
+
 export function jobDiagnosis(job) {
   if (job.state === "unknown") {
     return {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeJobIds, canRetry, formatState, jobDiagnosis } from "./model.js";
+import { activeJobIds, canRetry, formatState, jobDiagnosis, pollingRetryDelay } from "./model.js";
 
 describe("operator job states", () => {
   it("uses explicit human-readable labels for every queue state", () => {
@@ -44,5 +44,13 @@ describe("operator job states", () => {
     expect(activeJobIds([{ id: "remembered", state: "unknown" }], "remembered")).toEqual([
       "remembered",
     ]);
+  });
+
+  it("backs off transient polling failures without abandoning the active job", () => {
+    expect(pollingRetryDelay(1)).toBe(700);
+    expect(pollingRetryDelay(2)).toBe(1400);
+    expect(pollingRetryDelay(3)).toBe(2800);
+    expect(pollingRetryDelay(4)).toBe(5000);
+    expect(pollingRetryDelay(20)).toBe(5000);
   });
 });

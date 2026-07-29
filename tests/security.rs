@@ -346,8 +346,8 @@ async fn dashboard_repair_rotates_token_and_preserves_job_history() {
 #[tokio::test]
 async fn generic_browser_grants_keep_clients_and_job_history_separate() {
     let harness = Harness::new();
-    let origin = "https://app.example";
-    let first = pair_browser(&harness, origin, "Browser app").await;
+    let origin = format!("http://{HOST}");
+    let first = pair_browser(&harness, &origin, "PrintLatch dashboard").await;
     let first_token = first["token"].as_str().expect("first token");
 
     let body = multipart_body(&[
@@ -358,7 +358,7 @@ async fn generic_browser_grants_keep_clients_and_job_history_separate() {
         .method(Method::POST)
         .uri("/v1/jobs")
         .header(header::HOST, HOST)
-        .header(header::ORIGIN, origin)
+        .header(header::ORIGIN, &origin)
         .header(header::AUTHORIZATION, format!("Bearer {first_token}"))
         .body(Body::from(body))
         .expect("create request");
@@ -379,14 +379,14 @@ async fn generic_browser_grants_keep_clients_and_job_history_separate() {
         StatusCode::ACCEPTED
     );
 
-    let second = pair_browser(&harness, origin, "Browser app").await;
+    let second = pair_browser(&harness, &origin, "PrintLatch dashboard").await;
     assert_ne!(first["client_id"], second["client_id"]);
 
     let second_jobs = Request::builder()
         .method(Method::GET)
         .uri("/v1/jobs")
         .header(header::HOST, HOST)
-        .header(header::ORIGIN, origin)
+        .header(header::ORIGIN, &origin)
         .header(
             header::AUTHORIZATION,
             format!("Bearer {}", second["token"].as_str().expect("second token")),
@@ -404,11 +404,39 @@ async fn generic_browser_grants_keep_clients_and_job_history_separate() {
     .await;
     assert!(jobs["jobs"].as_array().expect("jobs").is_empty());
 
+    let dashboard = pair_dashboard(&harness, &origin).await;
+    assert_ne!(first["client_id"], dashboard["client_id"]);
+    assert_ne!(second["client_id"], dashboard["client_id"]);
+    let dashboard_jobs = Request::builder()
+        .method(Method::GET)
+        .uri("/v1/jobs")
+        .header(header::HOST, HOST)
+        .header(header::ORIGIN, &origin)
+        .header(
+            header::AUTHORIZATION,
+            format!(
+                "Bearer {}",
+                dashboard["token"].as_str().expect("dashboard token")
+            ),
+        )
+        .body(Body::empty())
+        .expect("dashboard request");
+    let jobs = response_json(
+        harness
+            .app
+            .clone()
+            .oneshot(dashboard_jobs)
+            .await
+            .expect("dashboard response"),
+    )
+    .await;
+    assert!(jobs["jobs"].as_array().expect("jobs").is_empty());
+
     let first_still_valid = Request::builder()
         .method(Method::GET)
         .uri("/v1/jobs")
         .header(header::HOST, HOST)
-        .header(header::ORIGIN, origin)
+        .header(header::ORIGIN, &origin)
         .header(header::AUTHORIZATION, format!("Bearer {first_token}"))
         .body(Body::empty())
         .expect("first-client request");
@@ -484,6 +512,92 @@ async fn rejects_dns_rebinding_and_websocket_upgrade() {
             .expect("response")
             .status(),
         StatusCode::BAD_REQUEST
+    );
+}
+
+#[tokio::test]
+async fn exposes_cors_and_private_network_headers_only_for_api_routes() {
+    let harness = Harness::new();
+    let origin = "https://attacker.example";
+    let shell = Request::builder()
+        .method(Method::GET)
+        .uri("/app")
+        .header(header::HOST, HOST)
+        .header(header::ORIGIN, origin)
+        .body(Body::empty())
+        .expect("cross-origin shell request");
+    let shell_response = harness
+        .app
+        .clone()
+        .oneshot(shell)
+        .await
+        .expect("shell response");
+    assert_eq!(shell_response.status(), StatusCode::OK);
+    assert!(
+        shell_response
+            .headers()
+            .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+            .is_none()
+    );
+
+    let shell_preflight = Request::builder()
+        .method(Method::OPTIONS)
+        .uri("/app")
+        .header(header::HOST, HOST)
+        .header(header::ORIGIN, origin)
+        .header("access-control-request-private-network", "true")
+        .body(Body::empty())
+        .expect("shell preflight");
+    let shell_preflight_response = harness
+        .app
+        .clone()
+        .oneshot(shell_preflight)
+        .await
+        .expect("shell preflight response");
+    assert_eq!(
+        shell_preflight_response.status(),
+        StatusCode::METHOD_NOT_ALLOWED
+    );
+    assert!(
+        shell_preflight_response
+            .headers()
+            .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+            .is_none()
+    );
+    assert!(
+        shell_preflight_response
+            .headers()
+            .get("access-control-allow-private-network")
+            .is_none()
+    );
+
+    let api_preflight = Request::builder()
+        .method(Method::OPTIONS)
+        .uri("/v1/pair")
+        .header(header::HOST, HOST)
+        .header(header::ORIGIN, origin)
+        .header("access-control-request-private-network", "true")
+        .body(Body::empty())
+        .expect("API preflight");
+    let api_preflight_response = harness
+        .app
+        .oneshot(api_preflight)
+        .await
+        .expect("API preflight response");
+    assert_eq!(api_preflight_response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(
+        api_preflight_response
+            .headers()
+            .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+            .expect("API CORS origin"),
+        origin
+    );
+    assert_eq!(
+        api_preflight_response
+            .headers()
+            .get("access-control-allow-private-network")
+            .expect("API private-network permission"),
+        "true"
     );
 }
 

@@ -107,13 +107,19 @@ pub fn router(state: AppState) -> Router {
         .route("/app/test-page.pdf", get(operator_test_pdf))
         .route("/health", get(health))
         .route("/health/instance", get(instance_identity))
-        .route("/v1/pair", post(pair))
-        .route("/v1/printers", get(list_printers))
-        .route("/v1/jobs", post(create_job).get(list_jobs))
-        .route("/v1/jobs/{id}", get(get_job))
-        .route("/v1/jobs/{id}/document", get(get_document))
-        .route("/v1/jobs/{id}/cancel", post(cancel_job))
-        .route("/v1/jobs/{id}/retry", post(retry_job))
+        .route("/v1/pair", post(pair).options(preflight))
+        .route("/v1/printers", get(list_printers).options(preflight))
+        .route(
+            "/v1/jobs",
+            post(create_job).get(list_jobs).options(preflight),
+        )
+        .route("/v1/jobs/{id}", get(get_job).options(preflight))
+        .route(
+            "/v1/jobs/{id}/document",
+            get(get_document).options(preflight),
+        )
+        .route("/v1/jobs/{id}/cancel", post(cancel_job).options(preflight))
+        .route("/v1/jobs/{id}/retry", post(retry_job).options(preflight))
         .route("/{*path}", options(preflight))
         .layer(DefaultBodyLimit::max(max_body))
         .layer(middleware::from_fn_with_state(
@@ -465,10 +471,11 @@ async fn security_headers(
     let private_network_requested = headers
         .get(&ACCESS_CONTROL_REQUEST_PRIVATE_NETWORK)
         .is_some_and(|value| value == "true");
+    let cors_api_request = request.uri().path().starts_with("/v1/");
     let method = request.method().clone();
     let mut response = next.run(request).await;
     apply_common_headers(response.headers_mut());
-    if let Some(origin) = origin {
+    if cors_api_request && let Some(origin) = origin {
         if let Ok(origin_header) = HeaderValue::from_str(&origin) {
             response
                 .headers_mut()

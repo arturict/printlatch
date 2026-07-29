@@ -34,7 +34,8 @@ The automated suite explicitly covers:
 - wrong-origin pairing without code consumption
 - spoofed local listener and agent-session-bound dashboard grants
 - dashboard re-pair token rotation with retained job history
-- independent application pairing for matching names and origins
+- dedicated dashboard identity isolated from application pairings with matching names and origins
+- CORS and private-network headers restricted to authenticated API routes, never the operator shell
 - DNS rebinding host
 - WebSocket upgrade
 - SSRF-shaped unknown field
@@ -46,6 +47,7 @@ The automated suite explicitly covers:
 - client-to-client job isolation
 - authenticated access to the bundled test PDF
 - independent polling selection for multiple active jobs
+- bounded polling recovery after transient status-request failures
 - atomic queue claim and concurrent cancel race
 - restart during print submission
 - explicit retry cap
