@@ -1,4 +1,8 @@
-use std::{net::SocketAddr, path::PathBuf};
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream},
+    path::PathBuf,
+    time::Duration,
+};
 
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
@@ -26,6 +30,8 @@ struct Cli {
 enum Command {
     /// Run the loopback-only print agent.
     Serve(ServeArgs),
+    /// Open the local operator dashboard with a one-time pairing grant.
+    Dashboard(DashboardArgs),
     /// Create a five-minute browser pairing code bound to one origin.
     Pair(PairArgs),
     /// Manage local and browser client credentials.
@@ -45,6 +51,15 @@ struct ServeArgs {
     port: Option<u16>,
     #[arg(long)]
     json_logs: bool,
+}
+
+#[derive(Args)]
+struct DashboardArgs {
+    #[arg(long, env = "PRINTLATCH_PORT")]
+    port: Option<u16>,
+    /// Print the URL without opening the default browser.
+    #[arg(long)]
+    no_open: bool,
 }
 
 #[derive(Args)]
@@ -81,6 +96,7 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
         Command::Serve(arguments) => serve(cli.data_dir, arguments).await,
+        Command::Dashboard(arguments) => dashboard(cli.data_dir, &arguments),
         Command::Pair(arguments) => {
             let (config, db) = local_state(cli.data_dir, None)?;
             let grant = auth::new_pairing_grant(&db, &arguments.origin, &arguments.name)?;
@@ -109,6 +125,41 @@ async fn main() -> Result<()> {
         }
         Command::Diagnose => diagnose(cli.data_dir),
     }
+}
+
+fn dashboard(data_dir: Option<PathBuf>, arguments: &DashboardArgs) -> Result<()> {
+    let (config, db) = local_state(data_dir, arguments.port)?;
+    let address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), config.port);
+    TcpStream::connect_timeout(&address, Duration::from_millis(750)).with_context(|| {
+        format!(
+            "PrintLatch is not reachable at http://{address}. Start the agent with `printlatch serve` and try again"
+        )
+    })?;
+    let origin = format!("http://127.0.0.1:{}", config.port);
+    let grant = auth::new_pairing_grant(&db, &origin, "PrintLatch dashboard")?;
+    let url = format!("{origin}/app/#code={}", grant.code);
+    println!("Dashboard URL: {url}");
+    println!("Pairing expires at (Unix): {}", grant.expires_at);
+    if !arguments.no_open {
+        open_dashboard(&url)?;
+        println!("Opened the dashboard in your default browser.");
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn open_dashboard(url: &str) -> Result<()> {
+    std::process::Command::new("explorer.exe")
+        .arg(url)
+        .spawn()
+        .context("could not open the default browser")?;
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn open_dashboard(_url: &str) -> Result<()> {
+    println!("Open the dashboard URL in a browser on this machine.");
+    Ok(())
 }
 
 async fn serve(data_dir: Option<PathBuf>, arguments: ServeArgs) -> Result<()> {

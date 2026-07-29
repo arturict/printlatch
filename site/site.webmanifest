@@ -4,8 +4,8 @@
   "description": "Local PDF printing for Windows web apps",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#07110e",
-  "theme_color": "#07110e",
+  "background_color": "#f4f0e8",
+  "theme_color": "#f4f0e8",
   "icons": [
     {
       "src": "/favicon.svg",

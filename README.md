@@ -39,6 +39,7 @@ The research and deliberate exclusions are documented in
 
 ```mermaid
 flowchart LR
+    O["Local operator dashboard<br/>one-time CLI grant"] -->|"Origin-bound browser token"| B
     A["Paired HTTPS web app"] -->|"Origin-bound token + PDF"| B["PrintLatch API<br/>127.0.0.1 only"]
     N["Local Node.js process"] -->|"Local token + PDF"| B
     B --> V["PDF guard<br/>size, MIME, pages, active content"]
@@ -71,10 +72,36 @@ commands or process arguments.
 
 The installer places the unsigned executable under
 `%LOCALAPPDATA%\PrintLatch\bin`, registers a per-user startup task, starts the
-agent hidden, and verifies `http://127.0.0.1:32191/health`.
+agent hidden, verifies `http://127.0.0.1:32191/health`, and opens the local
+operator dashboard with a five-minute one-time grant. Use `-NoDashboard` for
+unattended installation.
 
 The binary is not code-signed in v0.1. Windows may show a SmartScreen warning.
 Verify the published checksum and release provenance before continuing.
+
+## First local result
+
+If the dashboard is not already open, run:
+
+```powershell
+printlatch dashboard
+```
+
+The command checks that the agent is reachable, creates a one-time grant bound
+to the exact loopback dashboard origin, and opens the URL in the default
+browser. The token remains in browser session storage, while non-secret setup
+progress is inferred from the real printer list and queue.
+
+The first-run path deliberately avoids physical output:
+
+1. confirm the agent session and detected targets
+2. validate and inspect the built-in static one-page PDF
+3. explicitly confirm a job to `PrintLatch PDF Capture`
+4. wait for the queue to report success and verify the local artifact
+
+Windows printers are labeled `discovered`, not verified. A physical test page
+becomes optional only after the capture path succeeds. PrintLatch reports
+Windows submission state, not proof that paper emerged.
 
 ## Pair a web origin
 
@@ -163,8 +190,10 @@ that PrintLatch produced physical paper on that device.
 
 - Binds only to `127.0.0.1`, with strict `Host` validation against DNS rebinding.
 - No unauthenticated print, document, printer-list, cancel, or retry endpoint.
-- Browser tokens require the exact paired `Origin`; local tokens reject all
-  requests carrying an `Origin`.
+- Browser tokens require the exact paired `Origin`. The loopback dashboard also
+  accepts browser-proven same-origin GETs only when its stored origin exactly
+  matches the current loopback Host. Local tokens reject all requests carrying
+  an `Origin`.
 - Pairing codes are 128-bit, origin-bound, five-minute, and one-time.
 - Tokens are stored as SHA-256 digests, expire, rotate, and revoke.
 - Unknown multipart fields are rejected, so PrintLatch cannot be used as an SSRF

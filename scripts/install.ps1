@@ -3,7 +3,8 @@ param(
     [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA "PrintLatch\bin"),
     [string]$DataDir = (Join-Path $env:LOCALAPPDATA "PrintLatch"),
     [string]$TaskName = "PrintLatch Agent",
-    [switch]$NoStartup
+    [switch]$NoStartup,
+    [switch]$NoDashboard
 )
 
 $ErrorActionPreference = "Stop"
@@ -59,3 +60,6 @@ Write-Host "Installed PrintLatch at $destinationExe"
 Write-Host "Data directory: $resolvedDataDir"
 Write-Host "Health: ok"
 
+if (-not $NoDashboard) {
+    & $destinationExe --data-dir $resolvedDataDir dashboard
+}

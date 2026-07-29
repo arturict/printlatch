@@ -20,6 +20,9 @@ backend.
 - `pnpm test`
 - `pnpm build`
 
+The root Vitest suite covers operator status labels, conservative printer-error
+classification, interrupted-submission warnings, and retry eligibility.
+
 ## Abuse cases
 
 The automated suite explicitly covers:
@@ -58,3 +61,19 @@ smoke sequence checks:
 8. agent restart recovery
 9. uninstall while preserving data
 10. purge uninstall in the isolated test directory
+
+## Operator browser smoke
+
+The embedded dashboard is exercised against a real temporary agent and SQLite
+queue:
+
+1. create and consume a loopback dashboard grant
+2. verify capture target detection and the no-Windows-printer empty state
+3. validate and retrieve the built-in PDF preview
+4. confirm a separate PDF capture job
+5. observe queued, printing, and terminal updates through the authenticated API
+6. compare the capture SHA-256 with the source PDF
+7. check desktop and 375 px responsive layouts for horizontal overflow
+8. check browser console errors and accessible live status messages
+
+No physical printer is invoked by this smoke.

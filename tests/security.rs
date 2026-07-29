@@ -162,6 +162,66 @@ async fn local_tokens_cannot_be_replayed_from_a_browser_origin() {
 }
 
 #[tokio::test]
+async fn local_dashboard_get_requires_browser_proven_same_origin() {
+    let harness = Harness::new();
+    let origin = format!("http://{HOST}");
+    let grant = auth::new_pairing_grant(&harness.db, &origin, "dashboard").expect("pairing grant");
+    let pair_response = harness
+        .app
+        .clone()
+        .oneshot(json_request(
+            Method::POST,
+            "/v1/pair",
+            &serde_json::json!({ "code": grant.code }),
+            Some(&origin),
+        ))
+        .await
+        .expect("pair response");
+    let token = response_json(pair_response)
+        .await
+        .get("token")
+        .and_then(Value::as_str)
+        .expect("browser token")
+        .to_owned();
+
+    let accepted = Request::builder()
+        .method(Method::GET)
+        .uri("/v1/printers")
+        .header(header::HOST, HOST)
+        .header("sec-fetch-site", "same-origin")
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .body(Body::empty())
+        .expect("same-origin request");
+    assert_eq!(
+        harness
+            .app
+            .clone()
+            .oneshot(accepted)
+            .await
+            .expect("accepted response")
+            .status(),
+        StatusCode::OK
+    );
+
+    let missing_browser_proof = Request::builder()
+        .method(Method::GET)
+        .uri("/v1/printers")
+        .header(header::HOST, HOST)
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .body(Body::empty())
+        .expect("request without browser proof");
+    assert_eq!(
+        harness
+            .app
+            .oneshot(missing_browser_proof)
+            .await
+            .expect("rejected response")
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+}
+
+#[tokio::test]
 async fn rejects_dns_rebinding_and_websocket_upgrade() {
     let harness = Harness::new();
     let rebound = Request::builder()

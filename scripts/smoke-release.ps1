@@ -56,7 +56,8 @@ try {
         -InstallRoot $installRoot `
         -DataDir $dataDir `
         -TaskName $taskName `
-        -NoStartup
+        -NoStartup `
+        -NoDashboard
 
     $health = Invoke-RestMethod "$baseUri/health"
     if ($health.status -ne "ok" -or $health.bind -ne "loopback-only") {

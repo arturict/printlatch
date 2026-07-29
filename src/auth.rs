@@ -182,12 +182,32 @@ pub fn authenticate(db: &Database, headers: &HeaderMap) -> Result<AuthenticatedC
     match (&client.kind, &client.origin, request_origin) {
         (ClientKind::Browser, Some(expected), Some(actual))
             if constant_time_eq(expected.as_bytes(), actual.as_bytes()) => {}
+        (ClientKind::Browser, Some(expected), None)
+            if is_same_origin_loopback_dashboard(expected, headers) => {}
         (ClientKind::Browser, _, _) | (ClientKind::Local, _, Some(_)) => {
             return Err(AppError::Forbidden);
         }
         (ClientKind::Local, _, None) => {}
     }
     Ok(client)
+}
+
+fn is_same_origin_loopback_dashboard(expected: &str, headers: &HeaderMap) -> bool {
+    let Some(host) = headers
+        .get(http::header::HOST)
+        .and_then(|value| value.to_str().ok())
+    else {
+        return false;
+    };
+    let same_origin_fetch = headers
+        .get("sec-fetch-site")
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.eq_ignore_ascii_case("same-origin"));
+    same_origin_fetch
+        && constant_time_eq(
+            expected.as_bytes(),
+            format!("http://{host}").to_ascii_lowercase().as_bytes(),
+        )
 }
 
 pub fn hash_secret(value: &str) -> String {
@@ -273,5 +293,25 @@ mod tests {
 
         assert_ne!(zero_code, last_bit_group_changed);
         assert!(last_bit_group_changed.ends_with("000000FF"));
+    }
+
+    #[test]
+    fn same_origin_dashboard_fallback_is_loopback_host_bound() {
+        let mut headers = HeaderMap::new();
+        headers.insert(http::header::HOST, "127.0.0.1:32191".parse().expect("host"));
+        headers.insert("sec-fetch-site", "same-origin".parse().expect("fetch site"));
+        assert!(is_same_origin_loopback_dashboard(
+            "http://127.0.0.1:32191",
+            &headers
+        ));
+        assert!(!is_same_origin_loopback_dashboard(
+            "https://app.example",
+            &headers
+        ));
+        headers.insert("sec-fetch-site", "cross-site".parse().expect("fetch site"));
+        assert!(!is_same_origin_loopback_dashboard(
+            "http://127.0.0.1:32191",
+            &headers
+        ));
     }
 }

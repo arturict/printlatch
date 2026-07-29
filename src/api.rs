@@ -84,6 +84,12 @@ struct ParsedJob {
 pub fn router(state: AppState) -> Router {
     let max_body = MAX_JOB_BYTES + 64 * 1024;
     Router::new()
+        .route("/app", get(operator_index))
+        .route("/app/", get(operator_index))
+        .route("/app/app.js", get(operator_script))
+        .route("/app/model.js", get(operator_model))
+        .route("/app/styles.css", get(operator_styles))
+        .route("/app/test-page.pdf", get(operator_test_pdf))
         .route("/health", get(health))
         .route("/v1/pair", post(pair))
         .route("/v1/printers", get(list_printers))
@@ -99,6 +105,49 @@ pub fn router(state: AppState) -> Router {
             security_headers,
         ))
         .with_state(state)
+}
+
+async fn operator_index() -> Response {
+    static_asset(
+        "text/html; charset=utf-8",
+        include_bytes!("../ui/index.html"),
+    )
+}
+
+async fn operator_script() -> Response {
+    static_asset(
+        "text/javascript; charset=utf-8",
+        include_bytes!("../ui/app.js"),
+    )
+}
+
+async fn operator_model() -> Response {
+    static_asset(
+        "text/javascript; charset=utf-8",
+        include_bytes!("../ui/model.js"),
+    )
+}
+
+async fn operator_styles() -> Response {
+    static_asset(
+        "text/css; charset=utf-8",
+        include_bytes!("../ui/styles.css"),
+    )
+}
+
+async fn operator_test_pdf() -> Response {
+    static_asset(
+        "application/pdf",
+        include_bytes!("../docs/assets/sample.pdf"),
+    )
+}
+
+fn static_asset(content_type: &'static str, bytes: &'static [u8]) -> Response {
+    let mut response = Response::new(Body::from(bytes));
+    response
+        .headers_mut()
+        .insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
+    response
 }
 
 async fn health() -> Json<Health> {
@@ -392,6 +441,12 @@ fn apply_common_headers(headers: &mut HeaderMap) {
         HeaderName::from_static("x-frame-options"),
         HeaderValue::from_static("DENY"),
     );
+    headers.insert(
+        HeaderName::from_static("content-security-policy"),
+        HeaderValue::from_static(
+            "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-src 'self' blob:; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+        ),
+    );
 }
 
 fn valid_host(headers: &HeaderMap, port: u16) -> bool {
@@ -539,5 +594,25 @@ mod tests {
         assert!(!valid_host(&headers, 32_191));
         headers.insert(header::HOST, HeaderValue::from_static("127.0.0.1:32191"));
         assert!(valid_host(&headers, 32_191));
+    }
+
+    #[tokio::test]
+    async fn operator_assets_have_expected_types() {
+        assert_eq!(
+            operator_index()
+                .await
+                .headers()
+                .get(header::CONTENT_TYPE)
+                .expect("content type"),
+            "text/html; charset=utf-8"
+        );
+        assert_eq!(
+            operator_test_pdf()
+                .await
+                .headers()
+                .get(header::CONTENT_TYPE)
+                .expect("content type"),
+            "application/pdf"
+        );
     }
 }

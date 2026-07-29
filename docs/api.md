@@ -5,6 +5,20 @@ Base URL: `http://127.0.0.1:32191`
 The API is loopback-only. All `/v1` routes except pairing require
 `Authorization: Bearer pl_live_...`.
 
+## Local operator dashboard
+
+`GET /app/` serves static dashboard assets. They contain no token and expose no
+printer or queue data until paired. Run `printlatch dashboard` locally to create
+a five-minute pairing grant for the exact loopback origin. The grant travels in
+the URL fragment, so it is not sent in the HTTP request, server logs, or
+referrer.
+
+Same-origin dashboard GETs do not carry an `Origin` header in browsers. They are
+accepted only when the stored dashboard origin exactly equals
+`http://<current loopback Host>` and the browser supplies
+`Sec-Fetch-Site: same-origin`. Cross-origin browser requests still require the
+exact paired `Origin`.
+
 ## `GET /health`
 
 Unauthenticated liveness only. It returns product, version, loopback bind policy,
