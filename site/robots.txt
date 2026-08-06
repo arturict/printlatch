@@ -1,5 +1,7 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://printlatch.vercel.app/sitemap.xml
+User-agent: OAI-SearchBot
+Allow: /
 
+Sitemap: https://printlatch.vercel.app/sitemap.xml
