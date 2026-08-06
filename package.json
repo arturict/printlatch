@@ -8,7 +8,8 @@
     "format": "biome format --write .",
     "format:check": "biome format .",
     "lint": "biome lint .",
-    "test": "pnpm test:ui && pnpm --recursive test",
+    "test": "pnpm test:ui && pnpm test:site && pnpm --recursive test",
+    "test:site": "vitest run site/landing-analytics.test.js",
     "test:ui": "vitest run ui/model.test.js",
     "typecheck": "pnpm --recursive typecheck"
   },

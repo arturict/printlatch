@@ -10,6 +10,8 @@
     />
     <meta name="theme-color" content="#f4f0e8" />
     <meta name="color-scheme" content="light" />
+    <meta name="umami-website-id" content="fac3b1f0-bf25-4d4d-b289-04005c4694ab" />
+    <meta name="umami-script-url" content="https://umami.arturf.ch/script.js" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="PrintLatch" />
     <meta property="og:title" content="From web app to printer. One local latch." />
@@ -32,13 +34,13 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="manifest" href="/site.webmanifest" />
     <link rel="stylesheet" href="/styles-v2.css" />
-    <script src="/app-v2.js" defer></script>
+    <script type="module" src="/app-v3.js"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
 
     <div class="release-bar">
-      <a href="https://github.com/arturict/printlatch/releases/tag/v0.1.1">
+      <a href="https://github.com/arturict/printlatch/releases/tag/v0.1.1" data-analytics-action="view-release" data-analytics-location="release-bar" data-analytics-target="releases">
         <span class="release-dot" aria-hidden="true"></span>
         PrintLatch v0.1.1 is out
         <span class="release-detail">Windows 11 x64 · Apache-2.0</span>
@@ -67,17 +69,17 @@
           <a href="#security">Security</a>
           <a href="#how">How it works</a>
           <a href="#support">V1 scope</a>
-          <a href="https://github.com/arturict/printlatch/tree/main/docs">Docs</a>
+          <a href="https://github.com/arturict/printlatch/tree/main/docs" data-analytics-action="read-docs" data-analytics-location="nav" data-analytics-target="docs">Docs</a>
         </div>
 
-        <a class="nav-cta" href="https://github.com/arturict/printlatch/releases/latest">
+        <a class="nav-cta" href="https://github.com/arturict/printlatch/releases/latest" data-analytics-action="download-release" data-analytics-location="nav" data-analytics-target="releases">
           Download <span aria-hidden="true">↘</span>
         </a>
       </nav>
     </header>
 
     <main id="main">
-      <section class="hero shell" id="top">
+      <section class="hero shell" id="top" data-analytics-section="hero">
         <div class="hero-intro">
           <p class="kicker">
             <span>Local print infrastructure</span>
@@ -91,11 +93,11 @@
             jobs.
           </p>
           <div class="hero-actions">
-            <a class="button button-dark" href="https://github.com/arturict/printlatch/releases/latest">
+            <a class="button button-dark" href="https://github.com/arturict/printlatch/releases/latest" data-analytics-action="download-release" data-analytics-location="hero" data-analytics-target="releases">
               Download for Windows
               <span aria-hidden="true">↘</span>
             </a>
-            <a class="button button-paper" href="https://github.com/arturict/printlatch">
+            <a class="button button-paper" href="https://github.com/arturict/printlatch" data-analytics-action="view-source" data-analytics-location="hero" data-analytics-target="github">
               View on GitHub
               <span aria-hidden="true">↗</span>
             </a>
@@ -107,7 +109,7 @@
           </div>
         </div>
 
-        <div class="product-stage" id="product">
+        <div class="product-stage" id="product" data-analytics-section="product">
           <div class="stage-shadow" aria-hidden="true"></div>
           <div class="app-window">
             <div class="window-bar">
@@ -304,7 +306,7 @@
           <article><span>01</span><strong>Loopback only</strong><p>No LAN listener and no PrintLatch relay.</p></article>
           <article><span>02</span><strong>Explicit pairing</strong><p>One exact HTTPS origin at a time.</p></article>
           <article><span>03</span><strong>Durable queue</strong><p>Visible state without silent replay.</p></article>
-          <article><span>04</span><strong>Zero telemetry</strong><p>Your documents stay on your machine.</p></article>
+          <article><span>04</span><strong>Zero agent telemetry</strong><p>Your documents stay on your machine.</p></article>
         </div>
       </section>
 
@@ -333,13 +335,16 @@
         </div>
       </section>
 
-      <section class="security-section section" id="security">
+      <section class="security-section section" id="security" data-analytics-section="security">
         <div class="shell">
           <div class="section-topline">
             <div class="section-index">/ SECURITY MODEL</div>
             <a
               class="text-link"
               href="https://github.com/arturict/printlatch/blob/main/docs/security/threat-model.md"
+              data-analytics-action="read-threat-model"
+              data-analytics-location="security"
+              data-analytics-target="threat-model"
             >
               Read the threat model <span aria-hidden="true">↗</span>
             </a>
@@ -411,7 +416,7 @@
         </div>
       </section>
 
-      <section class="how-section section shell" id="how">
+      <section class="how-section section shell" id="how" data-analytics-section="how">
         <div class="section-index">/ HOW IT WORKS</div>
         <div class="how-heading">
           <h2>Three deliberate steps.<br />No invisible fourth.</h2>
@@ -444,7 +449,7 @@
         </ol>
       </section>
 
-      <section class="scope-section section" id="support">
+      <section class="scope-section section" id="support" data-analytics-section="scope">
         <div class="shell">
           <div class="scope-heading">
             <div>
@@ -494,7 +499,7 @@
         </div>
       </section>
 
-      <section class="sdk-section section shell">
+      <section class="sdk-section section shell" data-analytics-section="sdk">
         <div class="sdk-copy">
           <div class="section-index">/ TYPESCRIPT SDK</div>
           <h2>One explicit job.<br />Nothing magical.</h2>
@@ -526,12 +531,12 @@ console.log(job.state); <span class="code-comment">// queued</span></code></pre>
         </figure>
       </section>
 
-      <section class="final-cta">
+      <section class="final-cta" data-analytics-section="final">
         <div class="shell">
-          <p>Apache-2.0 · No account · No telemetry</p>
+          <p>Apache-2.0 · No account · No agent telemetry</p>
           <h2>Test the whole path.<br /><em>Keep the PDF local.</em></h2>
           <div class="hero-actions">
-            <a class="button button-light" href="https://github.com/arturict/printlatch/releases/latest">
+            <a class="button button-light" href="https://github.com/arturict/printlatch/releases/latest" data-analytics-action="download-release" data-analytics-location="final" data-analytics-target="releases">
               Get PrintLatch
               <span aria-hidden="true">↘</span>
             </a>
@@ -577,7 +582,7 @@ console.log(job.state); <span class="code-comment">// queued</span></code></pre>
       </div>
       <div class="shell footer-bottom">
         <span>© 2026 PrintLatch contributors</span>
-        <span>No tracking. No cookies. No print cloud.</span>
+        <span>Cookie-free landing analytics. No agent telemetry. No print cloud.</span>
       </div>
     </footer>
   </body>

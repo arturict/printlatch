@@ -5,12 +5,19 @@
 PrintLatch is a small, open-source Windows agent that lets an explicitly paired
 web app or local Node.js process submit PDF print jobs to printers already
 installed in Windows. Documents stay on the machine. There is no PrintLatch
-cloud, account, certificate subscription, or telemetry.
+cloud, account, certificate subscription, or agent telemetry.
 
 > Release status: `0.1.1` is Windows 11 x64 only. PDF capture is fully testable
 > without a printer. Windows printer discovery and submission use the native
 > print pipeline. No label, receipt, raw ESC/POS, ZPL, macOS, or Linux support is
 > claimed in this release.
+
+The separate public landing page uses our self-hosted Umami instance for
+aggregate page, bounded CTA, section, scroll-depth, and engaged-time events. It
+respects Do Not Track and Global Privacy Control, sets no analytics cookies, and
+receives neither documents nor activity from installed PrintLatch agents. URLs
+are reduced to the landing root plus safe, bounded standard UTM values, and
+referrer paths are removed before sending.
 
 [Download](https://github.com/arturict/printlatch/releases/latest) ·
 [Security model](docs/security/security-model.md) ·
@@ -215,7 +222,8 @@ that PrintLatch produced physical paper on that device.
 - Queue transitions are atomic. Interrupted submissions become `unknown` instead
   of being silently replayed.
 - No document bodies, tokens, or pairing codes are written to normal logs.
-- Telemetry is off because no telemetry code exists.
+- Agent telemetry is off because no telemetry code exists in the agent, local
+  dashboard, or SDK. Landing-page analytics are isolated to the public website.
 
 Read the complete [threat model](docs/security/threat-model.md), including
 residual risks around same-user malware, Windows drivers, and physical output.
