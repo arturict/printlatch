@@ -1,0 +1,20 @@
+# PrintLatch
+
+> PrintLatch is an open-source Windows agent for explicitly authorized PDF printing from web and Node.js applications without a print cloud.
+
+## Product facts
+
+- Category: local PDF print bridge for Windows web applications
+- Platform: Windows 11 x64
+- Input: static, unencrypted PDFs within documented limits
+- Authorization: exact-origin browser pairing or local-process authentication
+- Queue: durable local job history with conservative retry behavior
+- Network boundary: the agent binds to loopback and does not fetch print-job URLs
+- License: Apache-2.0
+
+## Primary links
+
+- Product: https://printlatch.vercel.app/
+- Source: https://github.com/arturict/printlatch
+- Releases: https://github.com/arturict/printlatch/releases
+- Documentation: https://github.com/arturict/printlatch/tree/main/docs
